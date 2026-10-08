@@ -12,16 +12,16 @@
 /* Layout: menu tree in a left sidebar (a slide-in drawer on phones), the selected list in a narrow column with branch lines like an outline. */
 :root{
   --bg:#f3f5f2; --surface:#ffffff; --fg:#1d2621; --muted:#66736b; --line:#d5ddd7;
-  --accent:#2f6b4f; --accent-soft:#e2eee7; --danger:#b4432f;
+  --accent:#2f6b4f; --accent-soft:#e2eee7; --danger:#b4432f; --danger-soft:#f6e3de; --blue:#2c5a8f; --blue-soft:#e1eaf4;
   --font-display:"Gowun Batang", "Nanum Myeongjo", serif;
   --font-body:"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#141a17; --surface:#1c2420; --fg:#e4ebe6; --muted:#93a39a; --line:#2f3a34;
-  --accent:#7cc39c; --accent-soft:#22352b; --danger:#ef8a74; color-scheme:dark}}
+  --accent:#7cc39c; --accent-soft:#22352b; --danger:#ef8a74; --danger-soft:#3a2622; --blue:#8db8e8; --blue-soft:#1f2c3b; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#141a17; --surface:#1c2420; --fg:#e4ebe6; --muted:#93a39a; --line:#2f3a34;
-  --accent:#7cc39c; --accent-soft:#22352b; --danger:#ef8a74; color-scheme:dark}
+  --accent:#7cc39c; --accent-soft:#22352b; --danger:#ef8a74; --danger-soft:#3a2622; --blue:#8db8e8; --blue-soft:#1f2c3b; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:16px;line-height:1.5}
 body{margin:0}
@@ -87,6 +87,58 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .gate p{margin:0;color:var(--muted);font-size:.9rem}
 .gate input{text-align:left}
 .gate .loginerr{color:var(--danger)}
+.wrap.wide{max-width:980px}
+.lhead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.lcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:12px;margin-bottom:14px}
+.lcard h2,.llist h2{font-size:1.05rem;margin:0}
+.lcard h3,.lgroup h3{font-size:.95rem;margin:4px 0 0}
+.lgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 14px}
+.lfield{display:grid;gap:4px;min-width:0}
+.llab{font-size:.8rem;color:var(--muted)}
+.lin{display:flex;align-items:center;gap:6px;min-width:0}
+.lin input,.lin select{flex:1;min-width:0;width:100%;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-variant-numeric:tabular-nums}
+.lin input:focus,.lin select:focus{outline:2px solid var(--accent);border-color:transparent}
+.lin{flex-wrap:wrap}
+.lhint{font-size:.75rem;color:var(--muted);white-space:nowrap;width:100%}
+.lnote{margin:0;font-size:.85rem;color:var(--muted)}
+.ltiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:14px}
+.ltile{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
+.ltt{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.ltile dl,.lcol dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0}
+.ltile dt,.lcol dt{color:var(--muted);font-size:.85rem}
+.ltile dd,.lcol dd{margin:0;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.pill{font-size:.75rem;font-weight:600;border-radius:999px;padding:3px 10px;white-space:nowrap}
+.pill.good{background:var(--accent-soft);color:var(--accent)}
+.pill.bad,.pill.none{background:var(--danger-soft);color:var(--danger)}
+.pill.did{background:var(--accent-soft);color:var(--accent)}
+.pill.bog{background:var(--blue-soft);color:var(--blue)}
+.ltools{margin-bottom:14px}
+.lbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.lbtns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.lgroup{display:grid;gap:10px;margin-bottom:18px}
+.lgroup h3 .n{font-weight:400;color:var(--muted);font-size:.8rem}
+.lc{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:10px}
+.lch{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.lname{display:grid;min-width:0}.lname b{overflow-wrap:anywhere}.lname span{font-size:.8rem;color:var(--muted)}
+.lprice{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.lprice b{font-size:1.2rem;font-variant-numeric:tabular-nums}.lprice span{font-size:.8rem;color:var(--muted)}
+.lcols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.lcol{border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
+.lcol.on{border-color:var(--accent);background:var(--accent-soft)}
+.lcolh{font-weight:600;font-size:.9rem;margin-bottom:6px;display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap}
+.lst{font-weight:400;font-size:.75rem;color:var(--danger)}
+.lcol dd.plus{color:var(--accent)}.lcol dd.minus{color:var(--danger)}
+.lmemo{margin:0;font-size:.85rem;color:var(--muted)}
+.lact{display:flex;justify-content:flex-end;gap:10px;align-items:center}
+.lact a{color:var(--accent);font-size:.9rem}
+.chip.del{color:var(--danger)}
+.ledit{border-color:var(--accent)}
+.ltablewrap{overflow-x:auto}
+.ltable{border-collapse:collapse;font-size:.85rem;min-width:420px}
+.ltable th,.ltable td{border-bottom:1px solid var(--line);padding:6px;text-align:left;font-variant-numeric:tabular-nums}
+.ltable input{width:70px;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
+.lnotes{font-size:.8rem;color:var(--muted);padding-left:18px;display:grid;gap:4px}
+@media (max-width:480px){.lcols{grid-template-columns:1fr}}
+@media (min-width:1100px){.lgroup{grid-template-columns:1fr 1fr}.lgroup h3{grid-column:1/-1}}
 .cnt{font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 .act{display:flex;gap:2px;flex:none}
 .ib{width:34px;height:34px;display:grid;place-items:center;border-radius:8px;color:var(--muted)}
@@ -116,7 +168,7 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
   <button class="ib" id="menubtn" aria-label="메뉴 열기"><svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
   <span class="brand">기홍이 홈페이지</span>
 </div>
-<div class="wrap">
+<div class="wrap" id="todoview">
   <header>
     <div>
       <div class="crumb" id="crumb"></div>
@@ -144,6 +196,7 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
     <button class="chip" id="sample">예시 나무로 시작하기</button>
   </div>
 </div>
+<div class="wrap wide" id="loanview" hidden></div>
 </main>
 </div>
 <div class="gate" id="gate" hidden>
@@ -162,6 +215,7 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
+<script src="loan.js"></script>
 <script>
 const ICON = {
   chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -177,6 +231,7 @@ const MENU=[
       {key:'jiyeon', label:'지연'},
     ]},
   ]},
+  {label:'대출계산기', key:'loan', view:'loan'},
 ];
 const LS_UI='hongtodo.ui';
 const LISTS={}; (function walk(items,path){ items.forEach(m=>{ const p=[...path,m.label]; if(m.key) LISTS[m.key]={...m,path:p}; if(m.children) walk(m.children,p); }); })(MENU,[]);
@@ -319,7 +374,7 @@ function renderNav(){
     const li=document.createElement('li'); const b=document.createElement('button');
     if(m.key){
       b.className='leafbtn'; b.textContent=m.label; if(m.key===current) b.setAttribute('aria-current','page');
-      const t=m.key===current?tree:(ls.get(cacheKey(m.key))||[]); const c=count(t);
+      const t=m.view?[]:(m.key===current?tree:(ls.get(cacheKey(m.key))||[])); const c=count(t);
       if(c.all){ const n=document.createElement('span'); n.className='n'; n.textContent=`${c.all-c.done}`; n.title='남은 할 일'; b.append(n); }
       b.onclick=()=>{ location.hash=m.key; $('shell').classList.remove('open'); };
       li.append(b);
@@ -342,6 +397,7 @@ let fs=null, userId=null, unsub=null;
 function watch(){
   if(unsub){ unsub(); unsub=null; }
   docRef=null;
+  if(LISTS[current] && LISTS[current].view){ window.Loan && Loan.sync(); return; }
   if(!fs || !userId) return;
   const L=LISTS[current], ref=fs.collection('shared').doc('home').collection('lists').doc(L.doc||L.key), key=current;  // 등록된 사람 모두가 같은 목록을 봐요
   docRef=ref; setSync('불러오는 중…');
@@ -361,8 +417,11 @@ async function openList(key){
   clearTimeout(saveTimer);
   while(saving) await new Promise(r=>setTimeout(r,100));
   if(dirty) await flush();
+  if(current && LISTS[current].view && window.Loan) Loan.close();
   current=key; editing=null; addingTo=null;
   const L=LISTS[key];
+  $('todoview').hidden=!!L.view; $('loanview').hidden=!L.view;
+  if(L.view){ if(unsub){ unsub(); unsub=null; } docRef=null; document.title=`${L.label} · 기홍이 홈페이지`; renderNav(); Loan.open($('loanview')); return; }
   $('crumb').textContent=L.path.slice(0,-1).join(' › ');
   $('title').textContent=`${L.label}의 할 일`;
   document.title=`${L.label}의 할 일 · 기홍이 홈페이지`;
@@ -370,6 +429,7 @@ async function openList(key){
   loaded=true; render(); renderNav();
   if(fs && userId) watch(); else if(!fs) setSync('이 기기에만 저장됨');
 }
+window.getDb=()=>({fs,userId});
 window.addEventListener('hashchange',()=>openList(location.hash.slice(1)));
 
 (function boot(){
