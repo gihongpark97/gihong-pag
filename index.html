@@ -292,7 +292,7 @@ async function flush(){
   if(saving || !dirty) return;
   saving=true; dirty=false;
   try{ await docRef.set({tree:JSON.parse(JSON.stringify(tree)), updatedAt:Date.now()}); setSync(dirty?'저장 중…':'모든 기기에 저장됨'); }
-  catch(e){ dirty=true; setSync('저장 실패 · 연결을 확인하세요', true); }
+  catch(e){ if(e && e.code==='permission-denied'){ setSync('이 계정은 고칠 권한이 없어요', true); saving=false; return; } dirty=true; setSync('저장 실패 · 연결을 확인하세요', true); }
   saving=false; if(dirty) saveTimer=setTimeout(flush,600);
 }
 
@@ -327,7 +327,7 @@ function watch(){
   if(unsub){ unsub(); unsub=null; }
   docRef=null;
   if(!fs || !userId) return;
-  const L=LISTS[current], ref=fs.collection('users').doc(userId).collection('todo').doc(L.doc||L.key), key=current;
+  const L=LISTS[current], ref=fs.collection('shared').doc('home').collection('lists').doc(L.doc||L.key)  // 등록된 사람 모두가 같은 목록을 봐요, key=current;
   docRef=ref; setSync('불러오는 중…');
   unsub=ref.onSnapshot(snap=>{
     if(key!==current || snap.metadata.hasPendingWrites || dirty || saving) return;
@@ -337,7 +337,7 @@ function watch(){
     ls.set(cacheKey(key),tree);
     if(editing===null && addingTo===null) render();
     renderNav(); setSync('모든 기기에 저장됨');
-  }, ()=>setSync('동기화 끊김 · 새로고침해 주세요', true));
+  }, e=>setSync(e && e.code==='permission-denied' ? '이 계정은 볼 권한이 없어요' : '동기화 끊김 · 새로고침해 주세요', true));
 }
 async function openList(key){
   if(!LISTS[key]) key='gihong';
