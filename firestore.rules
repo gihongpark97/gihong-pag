@@ -1,14 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 여기 적힌 구글 계정으로 로그인한 사람만 체크리스트를 보고 고칠 수 있어요.
+    // 홍이 님이 Firebase에서 직접 만든 계정(아이디@gihong-pag.com)으로 로그인한 사람만 보고 고칠 수 있어요.
     function isMember() {
       return request.auth != null
-        && request.auth.token.email_verified == true
-        && request.auth.token.email in [
-          'GIHONG_EMAIL@gmail.com',
-          'JIYEON_EMAIL@gmail.com'
-        ];
+        && request.auth.token.email.matches('.*@gihong-pag[.]com$');
     }
     match /shared/{document=**} {
       allow read, write: if isMember();

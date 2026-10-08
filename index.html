@@ -35,8 +35,8 @@ h1{font-family:var(--font-display);font-size:1.75rem;margin:0;text-wrap:balance;
 .sync.err{color:var(--danger)}
 .addbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:14px 10px;display:flex;gap:8px}
 .addbar input{flex:1;min-width:0}
-input[type=text]{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
-input[type=text]:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+input[type=text],input[type=password]{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+input[type=text]:focus,input[type=password]:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
 button{font:inherit;cursor:pointer;color:inherit;background:none;border:0}
 button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
 .btn{background:var(--accent);color:var(--bg);border-radius:10px;padding:10px 16px;font-weight:600;white-space:nowrap}
@@ -85,8 +85,8 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .gate .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:32px 24px;max-width:360px;width:100%;display:grid;gap:14px;text-align:center}
 .gate h1{font-size:1.5rem}
 .gate p{margin:0;color:var(--muted);font-size:.9rem}
-.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:12px;font-weight:600;background:var(--bg)}
-.gbtn:hover{border-color:var(--accent)}
+.gate input{text-align:left}
+.gate .loginerr{color:var(--danger)}
 .cnt{font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 .act{display:flex;gap:2px;flex:none}
 .ib{width:34px;height:34px;display:grid;place-items:center;border-radius:8px;color:var(--muted)}
@@ -123,7 +123,7 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
       <h1 id="title">할 일 나무</h1>
       <div class="sum" id="sum">불러오는 중…</div>
     </div>
-    <div class="acct"><div class="sync" id="sync"></div><button class="chip" id="auth" hidden>Google로 로그인</button></div>
+    <div class="acct"><div class="sync" id="sync"></div><button class="chip" id="auth" hidden>로그아웃</button></div>
   </header>
 
   <form class="addbar" id="addform">
@@ -147,11 +147,14 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 </main>
 </div>
 <div class="gate" id="gate" hidden>
-  <div class="card">
+  <form class="card" id="loginform">
     <h1>기홍이 홈페이지</h1>
-    <p id="gatemsg">등록된 구글 계정으로 로그인하면 체크리스트를 볼 수 있어요.</p>
-    <button class="gbtn" id="gatelogin"><svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.6 5.9c4.4-4.1 7-10.1 7-17.6z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.6-5.9c-2.1 1.4-4.9 2.3-8.3 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg><span id="gatebtntext">Google로 로그인</span></button>
-  </div>
+    <p>계정이 있는 사람만 들어올 수 있어요.</p>
+    <input type="text" id="loginid" placeholder="아이디" autocomplete="username" autocapitalize="off" spellcheck="false" required>
+    <input type="password" id="loginpw" placeholder="비밀번호" autocomplete="current-password" required>
+    <p class="loginerr" id="loginerr" hidden></p>
+    <button class="btn" type="submit" id="loginbtn">로그인</button>
+  </form>
 </div>
 <div class="toast" id="toast" hidden><span id="toastmsg"></span><button id="undo">되돌리기</button></div>
 
@@ -340,7 +343,7 @@ function watch(){
   if(unsub){ unsub(); unsub=null; }
   docRef=null;
   if(!fs || !userId) return;
-  const L=LISTS[current], ref=fs.collection('shared').doc('home').collection('lists').doc(L.doc||L.key)  // 등록된 사람 모두가 같은 목록을 봐요, key=current;
+  const L=LISTS[current], ref=fs.collection('shared').doc('home').collection('lists').doc(L.doc||L.key), key=current;  // 등록된 사람 모두가 같은 목록을 봐요
   docRef=ref; setSync('불러오는 중…');
   unsub=ref.onSnapshot(snap=>{
     if(key!==current || snap.metadata.hasPendingWrites || dirty || saving) return;
@@ -376,28 +379,30 @@ window.addEventListener('hashchange',()=>openList(location.hash.slice(1)));
   $('shell').hidden=true;
   firebase.initializeApp(cfg);
   const auth=firebase.auth(); fs=firebase.firestore();
+  // 아이디는 내부적으로 "아이디@gihong-pag.com" 형태의 계정으로 바꿔서 로그인해요.
+  const toEmail=id=>id.includes('@')?id:`${id}@gihong-pag.com`;
   const btn=$('auth');
-  btn.onclick=()=>{
-    if(auth.currentUser){ auth.signOut(); return; }
-    auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(()=>auth.signInWithRedirect(new firebase.auth.GoogleAuthProvider()));
+  btn.onclick=()=>auth.signOut();
+  const showErr=t=>{ const e=$('loginerr'); e.textContent=t; e.hidden=!t; };
+  $('loginform').onsubmit=async e=>{
+    e.preventDefault(); showErr('');
+    const id=$('loginid').value.trim().toLowerCase(), pw=$('loginpw').value;
+    if(!id||!pw) return;
+    $('loginbtn').disabled=true; $('loginbtn').textContent='로그인 중…';
+    try{ await auth.signInWithEmailAndPassword(toEmail(id),pw); $('loginpw').value=''; }
+    catch(err){
+      const c=err&&err.code||'';
+      showErr(c.includes('too-many-requests') ? '여러 번 틀려서 잠시 막혔어요. 조금 뒤에 다시 해 주세요.'
+        : (c.includes('network') ? '인터넷 연결을 확인해 주세요.' : '아이디 또는 비밀번호가 맞지 않아요.'));
+    }
+    $('loginbtn').disabled=false; $('loginbtn').textContent='로그인';
   };
-  $('gatelogin').onclick=()=>{ if(auth.currentUser) auth.signOut(); else btn.onclick(); };
-  window.denied=()=>{
-    const email=auth.currentUser && auth.currentUser.email;
-    tree=[]; render();
-    $('shell').hidden=true; $('gate').hidden=false;
-    $('gatemsg').textContent=`${email||'이 계정'}은 등록되지 않은 계정이에요. 등록된 구글 계정으로 다시 로그인해 주세요.`;
-    $('gatebtntext').textContent='다른 계정으로 로그인';
-  };
+  window.denied=()=>{ auth.signOut(); showErr('이 계정은 체크리스트를 볼 권한이 없어요.'); };
   auth.onAuthStateChanged(u=>{
     userId=u?u.uid:null;
     $('shell').hidden=!u; $('gate').hidden=!!u;
-    btn.hidden=!u; btn.textContent='로그아웃';
-    if(!u){
-      $('gatemsg').textContent='등록된 구글 계정으로 로그인하면 체크리스트를 볼 수 있어요.';
-      $('gatebtntext').textContent='Google로 로그인';
-      tree=[]; render();
-    }
+    btn.hidden=!u;
+    if(!u){ tree=[]; render(); setTimeout(()=>$('loginid').focus(),0); }
     watch();
   });
 })();
