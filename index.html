@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>기홍이 할 일 나무</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<meta name="theme-color" content="#2f6b4f">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6b4f'/%3E%3Cpath d='M9 16.5l4.5 4.5L23 11' stroke='white' stroke-width='3.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+/* Layout: single narrow column, a sticky add bar on top, the task tree drawn with branch lines like an outline. */
+:root{
+  --bg:#f3f5f2; --surface:#ffffff; --fg:#1d2621; --muted:#66736b; --line:#d5ddd7;
+  --accent:#2f6b4f; --accent-soft:#e2eee7; --danger:#b4432f;
+  --font-display:"Gowun Batang", "Nanum Myeongjo", serif;
+  --font-body:"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141a17; --surface:#1c2420; --fg:#e4ebe6; --muted:#93a39a; --line:#2f3a34;
+  --accent:#7cc39c; --accent-soft:#22352b; --danger:#ef8a74; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141a17; --surface:#1c2420; --fg:#e4ebe6; --muted:#93a39a; --line:#2f3a34;
+  --accent:#7cc39c; --accent-soft:#22352b; --danger:#ef8a74; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:16px;line-height:1.5}
+body{margin:0}
+[hidden]{display:none!important}
+.wrap{max-width:680px;margin:0 auto;padding-inline:16px;padding-block:20px 80px}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--font-display);font-size:1.75rem;margin:0;text-wrap:balance;letter-spacing:-.01em}
+.sum{color:var(--muted);font-size:.875rem;font-variant-numeric:tabular-nums}
+.sync{font-size:.75rem;color:var(--muted);letter-spacing:.02em}
+.acct{display:flex;gap:8px;align-items:center}
+.sync.err{color:var(--danger)}
+.addbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:14px 10px;display:flex;gap:8px}
+.addbar input{flex:1;min-width:0}
+input[type=text]{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+input[type=text]:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+button{font:inherit;cursor:pointer;color:inherit;background:none;border:0}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.btn{background:var(--accent);color:var(--bg);border-radius:10px;padding:10px 16px;font-weight:600;white-space:nowrap}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:.875rem;color:var(--muted);padding-bottom:6px}
+.chip{border:1px solid var(--line);border-radius:999px;padding:4px 12px;color:var(--muted)}
+.chip[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+ul.tree{list-style:none;margin:0;padding:0}
+ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(--line);margin-left:15px}
+.row{display:flex;align-items:center;gap:4px;min-height:44px;border-radius:8px;padding-right:4px}
+.row:hover{background:var(--surface)}
+.tw{width:30px;height:30px;flex:none;display:grid;place-items:center;color:var(--muted);border-radius:6px}
+.tw svg{transition:transform .15s}
+.tw[aria-expanded="false"] svg{transform:rotate(-90deg)}
+.tw.leaf{visibility:hidden}
+.ck{width:22px;height:22px;flex:none;border:2px solid var(--muted);border-radius:6px;display:grid;place-items:center;margin-right:6px}
+.ck[aria-checked="true"]{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.ck.partial{border-color:var(--accent)}
+.ck.partial::after{content:"";width:10px;height:2px;background:var(--accent)}
+.txt{flex:1;min-width:0;overflow-wrap:anywhere;padding:6px 2px;cursor:text}
+.done>.row .txt{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--line)}
+.cnt{font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.act{display:flex;gap:2px;flex:none}
+.ib{width:34px;height:34px;display:grid;place-items:center;border-radius:8px;color:var(--muted)}
+.ib:hover{background:var(--accent-soft);color:var(--accent)}
+.ib.del:hover{color:var(--danger)}
+.row input{flex:1;min-width:0;padding:6px 10px}
+.childadd{display:flex;gap:6px;padding:4px 0 6px 34px}
+.childadd input{flex:1;min-width:0;padding:8px 10px}
+.empty{border:1px dashed var(--line);border-radius:12px;padding:28px 20px;text-align:center;color:var(--muted);display:grid;gap:12px;justify-items:center}
+.empty b{color:var(--fg);font-family:var(--font-display);font-size:1.15rem}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:10px;display:flex;gap:14px;align-items:center;font-size:.9rem;max-width:calc(100% - 32px)}
+.toast button{color:var(--bg);font-weight:600;text-decoration:underline}
+@media (hover:hover){.act{opacity:.35}.row:hover .act,.row:focus-within .act{opacity:1}}
+@media (prefers-reduced-motion:reduce){.tw svg{transition:none}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>할 일 나무</h1>
+      <div class="sum" id="sum">불러오는 중…</div>
+    </div>
+    <div class="acct"><div class="sync" id="sync"></div><button class="chip" id="auth" hidden>Google로 로그인</button></div>
+  </header>
+
+  <form class="addbar" id="addform">
+    <input type="text" id="newtask" placeholder="새 할 일 (큰 줄기)" autocomplete="off" enterkeyhint="done">
+    <button class="btn" type="submit">추가</button>
+  </form>
+
+  <div class="tools">
+    <button class="chip" id="hidedone" aria-pressed="false">완료 숨기기</button>
+    <button class="chip" id="expandall">모두 펼치기</button>
+    <button class="chip" id="collapseall">모두 접기</button>
+  </div>
+
+  <ul class="tree" id="tree"></ul>
+  <div class="empty" id="empty" hidden>
+    <b>아직 할 일이 없어요</b>
+    <span>위 칸에 큰 일을 적고, 각 항목의 ＋ 버튼으로 세부 할 일을 가지처럼 붙이세요.</span>
+    <button class="chip" id="sample">예시 나무로 시작하기</button>
+  </div>
+</div>
+<div class="toast" id="toast" hidden><span id="toastmsg"></span><button id="undo">되돌리기</button></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+const ICON = {
+  chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  check:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7.5l2.5 2.5L11 4.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  plus:'<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 4v10M4 9h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  del:'<svg width="17" height="17" viewBox="0 0 18 18" fill="none"><path d="M4 5h10M7.5 5V3.5h3V5M5.5 5l.7 9.5h5.6l.7-9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+const LS_CACHE='hongtodo.cache', LS_UI='hongtodo.ui';
+const ls = {
+  get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},
+  set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+};
+
+let tree = [];                 // [{id,text,done,children:[]}]
+let ui = ls.get(LS_UI) || {collapsed:{}, hideDone:false};
+let addingTo = null, editing = null, undoState = null, toastTimer = null;
+let docRef = null, saveTimer = null, saving = false, dirty = false, loaded = false;
+
+const $ = id => document.getElementById(id);
+const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+
+function find(id, list=tree, parent=null){
+  for(const n of list){
+    if(n.id===id) return {node:n, list, parent};
+    const r = find(id, n.children, n); if(r) return r;
+  }
+  return null;
+}
+function stats(n){ // leaf counts under a node
+  if(!n.children.length) return {all:1, done:n.done?1:0};
+  return n.children.reduce((a,c)=>{const s=stats(c);a.all+=s.all;a.done+=s.done;return a},{all:0,done:0});
+}
+function setDone(n,v){ n.done=v; n.children.forEach(c=>setDone(c,v)); }
+function syncParents(list=tree){ // a parent is done when all children are done
+  for(const n of list){ if(n.children.length){ syncParents(n.children); n.done = n.children.every(c=>c.done); } }
+}
+
+/* ---------- render ---------- */
+function render(){
+  const root = $('tree'); root.replaceChildren();
+  tree.forEach(n=>{ const el=renderNode(n); if(el) root.append(el); });
+  $('empty').hidden = !loaded || tree.length>0;
+  const s = tree.reduce((a,n)=>{const t=stats(n);a.all+=t.all;a.done+=t.done;return a},{all:0,done:0});
+  $('sum').textContent = loaded ? (s.all ? `할 일 ${s.all}개 중 ${s.done}개 완료` : '비어 있음') : '불러오는 중…';
+  $('hidedone').setAttribute('aria-pressed', ui.hideDone);
+  const f = document.querySelector('[data-focus]'); if(f){ f.focus(); f.removeAttribute('data-focus'); }
+}
+function renderNode(n){
+  if(ui.hideDone && n.done) return null;
+  const li = document.createElement('li'); if(n.done) li.className='done';
+  const row = document.createElement('div'); row.className='row';
+  const hasKids = n.children.length>0, open = !ui.collapsed[n.id];
+
+  const tw = document.createElement('button'); tw.className='tw'+(hasKids?'':' leaf');
+  tw.innerHTML=ICON.chev; tw.setAttribute('aria-expanded',open); tw.setAttribute('aria-label',open?'접기':'펼치기');
+  tw.onclick=()=>{ if(open) ui.collapsed[n.id]=1; else delete ui.collapsed[n.id]; ls.set(LS_UI,ui); render(); };
+
+  const st = stats(n);
+  const ck = document.createElement('button'); ck.className='ck'; ck.setAttribute('role','checkbox');
+  ck.setAttribute('aria-checked', n.done); ck.setAttribute('aria-label','완료 표시');
+  if(n.done) ck.innerHTML=ICON.check; else if(hasKids && st.done>0) ck.classList.add('partial');
+  ck.onclick=()=>{ setDone(n,!n.done); syncParents(); commit(); };
+
+  row.append(tw, ck);
+  if(editing===n.id){
+    const inp=document.createElement('input'); inp.type='text'; inp.id='edit-'+n.id; inp.value=n.text; inp.setAttribute('data-focus','');
+    const finish=save=>{ if(editing!==n.id) return; editing=null; const v=inp.value.trim(); if(save && v && v!==n.text){ n.text=v; commit(); } else render(); };
+    inp.onkeydown=e=>{ if(e.key==='Enter'){e.preventDefault();finish(true)} if(e.key==='Escape') finish(false); };
+    inp.onblur=()=>finish(true);
+    row.append(inp);
+  } else {
+    const t=document.createElement('span'); t.className='txt'; t.textContent=n.text; t.title='눌러서 수정';
+    t.onclick=()=>{ editing=n.id; addingTo=null; render(); };
+    row.append(t);
+    if(hasKids){ const c=document.createElement('span'); c.className='cnt'; c.textContent=`${st.done}/${st.all}`; row.append(c); }
+    const act=document.createElement('div'); act.className='act';
+    const add=document.createElement('button'); add.className='ib'; add.innerHTML=ICON.plus; add.setAttribute('aria-label','세부 할 일 추가');
+    add.onclick=()=>{ addingTo = addingTo===n.id?null:n.id; delete ui.collapsed[n.id]; editing=null; render(); };
+    const del=document.createElement('button'); del.className='ib del'; del.innerHTML=ICON.del; del.setAttribute('aria-label','삭제');
+    del.onclick=()=>remove(n.id);
+    act.append(add,del); row.append(act);
+  }
+  li.append(row);
+
+  if(addingTo===n.id){
+    const f=document.createElement('form'); f.className='childadd';
+    const inp=document.createElement('input'); inp.type='text'; inp.id='child-'+n.id; inp.placeholder=`'${n.text}' 아래에 추가`; inp.setAttribute('data-focus',''); inp.setAttribute('enterkeyhint','done');
+    const b=document.createElement('button'); b.className='btn'; b.type='submit'; b.textContent='추가';
+    f.onsubmit=e=>{ e.preventDefault(); const v=inp.value.trim(); if(!v){ addingTo=null; render(); return; }
+      n.children.push({id:uid(),text:v,done:false,children:[]}); syncParents(); commit(); };
+    inp.onkeydown=e=>{ if(e.key==='Escape'){ addingTo=null; render(); } };
+    f.append(inp,b); li.append(f);
+  }
+  if(hasKids && open){
+    const ul=document.createElement('ul');
+    n.children.forEach(c=>{ const el=renderNode(c); if(el) ul.append(el); });
+    if(ul.children.length) li.append(ul);
+  }
+  return li;
+}
+
+/* ---------- actions ---------- */
+function remove(id){
+  const r=find(id); if(!r) return;
+  undoState=JSON.stringify(tree);
+  r.list.splice(r.list.indexOf(r.node),1); syncParents(); commit();
+  $('toastmsg').textContent=`'${r.node.text}' 삭제됨`; $('toast').hidden=false;
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>{$('toast').hidden=true; undoState=null},6000);
+}
+$('undo').onclick=()=>{ if(undoState){ tree=JSON.parse(undoState); undoState=null; commit(); } $('toast').hidden=true; };
+$('addform').onsubmit=e=>{ e.preventDefault(); const v=$('newtask').value.trim(); if(!v) return;
+  tree.push({id:uid(),text:v,done:false,children:[]}); $('newtask').value=''; commit(); };
+$('hidedone').onclick=()=>{ ui.hideDone=!ui.hideDone; ls.set(LS_UI,ui); render(); };
+$('expandall').onclick=()=>{ ui.collapsed={}; ls.set(LS_UI,ui); render(); };
+$('collapseall').onclick=()=>{ const walk=l=>l.forEach(n=>{ if(n.children.length){ui.collapsed[n.id]=1; walk(n.children);} }); walk(tree); ls.set(LS_UI,ui); render(); };
+$('sample').onclick=()=>{
+  const mk=(text,children=[],done=false)=>({id:uid(),text,done,children});
+  tree=[
+    mk('예시: 개인 홈페이지',[mk('할 일 목록 만들기',[],true),mk('도메인 알아보기'),mk('다음 기능 정하기',[mk('일정 달력'),mk('메모장')])]),
+    mk('예시: 이번 주 집안일',[mk('장보기'),mk('빨래',[],true)]),
+  ]; syncParents(); commit();
+};
+
+/* ---------- storage ---------- */
+function setSync(text,err){ const s=$('sync'); s.textContent=text; s.classList.toggle('err',!!err); }
+function commit(){
+  addingTo=null; render(); ls.set(LS_CACHE,tree);
+  if(!docRef){ setSync('이 기기에만 저장됨'); return; }
+  dirty=true; setSync('저장 중…'); clearTimeout(saveTimer); saveTimer=setTimeout(flush,600);
+}
+async function flush(){
+  if(saving || !dirty) return;
+  saving=true; dirty=false;
+  try{ await docRef.set({tree:JSON.parse(JSON.stringify(tree)), updatedAt:Date.now()}); setSync(dirty?'저장 중…':'모든 기기에 저장됨'); }
+  catch(e){ dirty=true; setSync('저장 실패 · 연결을 확인하세요', true); }
+  saving=false; if(dirty) saveTimer=setTimeout(flush,600);
+}
+
+(function boot(){
+  const cached=ls.get(LS_CACHE); if(Array.isArray(cached)){ tree=cached; }
+  loaded=true; render();
+  const cfg=window.FIREBASE_CONFIG;
+  if(!window.firebase || !cfg || !cfg.apiKey){ setSync('이 기기에만 저장됨'); return; }
+  firebase.initializeApp(cfg);
+  const auth=firebase.auth(), fs=firebase.firestore();
+  const btn=$('auth'); let unsub=null;
+  btn.onclick=()=>{
+    if(auth.currentUser){ auth.signOut(); return; }
+    auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(()=>auth.signInWithRedirect(new firebase.auth.GoogleAuthProvider()));
+  };
+  auth.onAuthStateChanged(u=>{
+    btn.hidden=false;
+    if(unsub){ unsub(); unsub=null; }
+    if(!u){ docRef=null; btn.textContent='Google로 로그인'; setSync('로그인하면 모든 기기에 동기화돼요'); return; }
+    btn.textContent='로그아웃';
+    docRef=fs.collection('users').doc(u.uid).collection('todo').doc('tree');
+    setSync('불러오는 중…');
+    unsub=docRef.onSnapshot(snap=>{
+      if(snap.metadata.hasPendingWrites || dirty || saving) return;
+      const d=snap.exists ? snap.data() : null;
+      if(d && Array.isArray(d.tree)){ tree=d.tree; }
+      else if(!snap.metadata.fromCache && tree.length){ dirty=true; flush(); } // first login: push this device's list up
+      ls.set(LS_CACHE,tree);
+      if(editing===null && addingTo===null) render();
+      setSync('모든 기기에 저장됨');
+    }, ()=>setSync('동기화 끊김 · 새로고침해 주세요', true));
+  });
+})();
+</script>
+</body>
+</html>
