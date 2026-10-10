@@ -91,6 +91,7 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .gate p{margin:0;color:var(--muted);font-size:.9rem}
 .gate input{text-align:left}
 .gate .loginerr{color:var(--danger)}
+.gate .linkbtn{background:none;border:0;color:var(--muted);font:inherit;font-size:.9rem;cursor:pointer;text-decoration:underline;padding:4px}
 .wrap.wide{max-width:980px}
 .lhead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 .lcard{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:12px;margin-bottom:14px}
@@ -235,8 +236,10 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
     <p>계정이 있는 사람만 들어올 수 있어요.</p>
     <input type="text" id="loginid" placeholder="아이디" autocomplete="username" autocapitalize="off" spellcheck="false" required>
     <input type="password" id="loginpw" placeholder="비밀번호" autocomplete="current-password" required>
+    <input type="password" id="loginpw2" placeholder="비밀번호 한 번 더" autocomplete="new-password" hidden>
     <p class="loginerr" id="loginerr" hidden></p>
     <button class="btn" type="submit" id="loginbtn">로그인</button>
+    <button class="linkbtn" type="button" id="modebtn">처음이세요? 계정 만들기</button>
   </form>
 </div>
 <div class="toast" id="toast" hidden><span id="toastmsg"></span><button id="undo">되돌리기</button></div>
@@ -502,21 +505,46 @@ $('bkin').onclick=()=>{
   const btn=$('auth');
   btn.onclick=()=>auth.signOut();
   const showErr=t=>{ const e=$('loginerr'); e.textContent=t; e.hidden=!t; };
+  // 가입 모드: 아이디·비밀번호를 정해서 직접 계정을 만들어요. 데이터는 허용된 아이디만 볼 수 있어요(firestore.rules).
+  let signup=false;
+  const setMode=on=>{
+    signup=on; showErr('');
+    $('loginpw2').hidden=!on; $('loginpw2').required=on; $('loginpw2').value='';
+    $('loginpw').autocomplete=on?'new-password':'current-password';
+    $('loginpw').placeholder=on?'비밀번호 (6자 이상)':'비밀번호';
+    $('loginbtn').textContent=on?'계정 만들기':'로그인';
+    $('modebtn').textContent=on?'이미 계정이 있어요 · 로그인':'처음이세요? 계정 만들기';
+  };
+  $('modebtn').onclick=()=>setMode(!signup);
+  const errMsg=c=>c.includes('too-many-requests') ? '여러 번 시도해서 잠시 막혔어요. 조금 뒤에 다시 해 주세요.'
+    : c.includes('network') ? '인터넷 연결을 확인해 주세요.'
+    : c.includes('email-already-in-use') ? '이미 있는 아이디예요. 로그인해 주세요.'
+    : c.includes('weak-password') ? '비밀번호는 6자 이상으로 해 주세요.'
+    : c.includes('operation-not-allowed') || c.includes('admin-restricted') ? '지금은 계정을 만들 수 없게 설정돼 있어요.'
+    : signup ? '계정을 만들지 못했어요. 다시 해 주세요.' : '아이디 또는 비밀번호가 맞지 않아요.';
   $('loginform').onsubmit=async e=>{
     e.preventDefault(); showErr('');
     const id=$('loginid').value.trim().toLowerCase(), pw=$('loginpw').value;
     if(!id||!pw) return;
-    $('loginbtn').disabled=true; $('loginbtn').textContent='로그인 중…';
-    try{ await auth.signInWithEmailAndPassword(toEmail(id),pw); $('loginpw').value=''; }
-    catch(err){
-      const c=err&&err.code||'';
-      showErr(c.includes('too-many-requests') ? '여러 번 틀려서 잠시 막혔어요. 조금 뒤에 다시 해 주세요.'
-        : (c.includes('network') ? '인터넷 연결을 확인해 주세요.' : '아이디 또는 비밀번호가 맞지 않아요.'));
+    if(signup){
+      if(!/^[a-z0-9][a-z0-9._-]{1,19}$/.test(id)) return showErr('아이디는 영문 소문자·숫자로 2~20자로 해 주세요.');
+      if(pw.length<6) return showErr('비밀번호는 6자 이상으로 해 주세요.');
+      if(pw!==$('loginpw2').value) return showErr('비밀번호 두 개가 서로 달라요.');
     }
-    $('loginbtn').disabled=false; $('loginbtn').textContent='로그인';
+    const label=$('loginbtn').textContent;
+    $('loginbtn').disabled=true; $('loginbtn').textContent=signup?'만드는 중…':'로그인 중…';
+    try{
+      if(signup) await auth.createUserWithEmailAndPassword(toEmail(id),pw);
+      else await auth.signInWithEmailAndPassword(toEmail(id),pw);
+      $('loginpw').value=''; $('loginpw2').value='';
+    }catch(err){ showErr(errMsg(err&&err.code||'')); }
+    $('loginbtn').disabled=false; $('loginbtn').textContent=label;
   };
-  window.denied=()=>{ auth.signOut(); showErr('이 계정은 체크리스트를 볼 권한이 없어요.'); };
-  auth.onAuthStateChanged(u=>{
+  window.denied=()=>{ auth.signOut(); setMode(false); showErr('이 아이디는 아직 들어올 수 있게 허용되지 않았어요. 홍이 님께 말해 주세요.'); };
+  auth.onAuthStateChanged(async u=>{
+    // 로그인은 됐어도 허용된 아이디인지 DB에 한 번 물어보고 나서 화면을 열어요.
+    if(u){ try{ await fs.collection('shared').doc('home').get(); }
+      catch(e){ if(e&&e.code==='permission-denied'){ denied(); return; } } }
     userId=u?u.uid:null;
     $('shell').hidden=!u; $('gate').hidden=!!u;
     btn.hidden=!u;

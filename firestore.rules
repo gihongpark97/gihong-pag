@@ -1,10 +1,14 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 홍이 님이 Firebase에서 직접 만든 계정(아이디@gihong-pag.com)으로 로그인한 사람만 보고 고칠 수 있어요.
+    // 사이트에서 누구나 계정을 만들 수는 있지만, 아래 목록에 있는 아이디로 로그인한 사람만 데이터를 보고 고칠 수 있어요.
+    // 사람을 추가하려면 목록에 '아이디@gihong-pag.com'을 넣고 규칙을 다시 게시하세요.
     function isMember() {
       return request.auth != null
-        && request.auth.token.email.matches('.*@gihong-pag[.]com$');
+        && request.auth.token.email in [
+          'gihong@gihong-pag.com',
+          'jiyeon@gihong-pag.com'
+        ];
     }
     match /shared/{document=**} {
       allow read, write: if isMember();
