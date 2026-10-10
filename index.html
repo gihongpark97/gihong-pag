@@ -91,6 +91,10 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .gate p{margin:0;color:var(--muted);font-size:.9rem}
 .gate input{text-align:left}
 .gate .loginerr{color:var(--danger)}
+.who{font-size:.9rem;margin:2px 0 8px}
+.who span{color:var(--muted)}
+.pwform{display:grid;gap:8px;margin-top:10px}
+.gate .forgot{text-align:left;background:var(--bg);border-radius:10px;padding:12px;line-height:1.55}
 .ulist{display:grid;gap:2px;margin-top:6px}
 .ucheck{display:flex;align-items:center;gap:10px;min-height:40px;font-size:.95rem;cursor:pointer}
 .ucheck input{width:18px;height:18px;accent-color:var(--accent)}
@@ -193,6 +197,17 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 <aside class="side" id="side" aria-label="메뉴">
   <div class="brand">기홍이 홈페이지</div>
   <ul class="nav" id="nav"></ul>
+  <div class="backup" id="acctbox" hidden>
+    <div class="llab">내 계정</div>
+    <div class="who" id="who"></div>
+    <div class="lbtns"><button class="chip" id="nameedit" type="button">이름 바꾸기</button><button class="chip" id="pwedit" type="button">비밀번호 바꾸기</button><button class="chip" type="button" onclick="logout()">로그아웃</button></div>
+    <form class="pwform" id="pwform" hidden>
+      <input type="password" id="pwcur" placeholder="지금 비밀번호" autocomplete="current-password" required>
+      <input type="password" id="pwnew" placeholder="새 비밀번호 (6자 이상)" autocomplete="new-password" required>
+      <p class="loginerr" id="pwmsg" hidden></p>
+      <button class="btn" type="submit">바꾸기</button>
+    </form>
+  </div>
   <div class="backup">
     <div class="llab">백업 (이 기기 데이터)</div>
     <div class="lbtns"><button class="chip" id="bkout" type="button">파일로 저장</button><button class="chip" id="bkin" type="button">불러오기</button></div>
@@ -240,12 +255,15 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
   <form class="card" id="loginform">
     <h1>기홍이 홈페이지</h1>
     <p>계정이 있는 사람만 들어올 수 있어요.</p>
+    <input type="text" id="signname" placeholder="이름 (예: 박기홍)" autocomplete="name" hidden>
     <input type="text" id="loginid" placeholder="아이디" autocomplete="username" autocapitalize="off" spellcheck="false" required>
     <input type="password" id="loginpw" placeholder="비밀번호" autocomplete="current-password" required>
     <input type="password" id="loginpw2" placeholder="비밀번호 한 번 더" autocomplete="new-password" hidden>
     <p class="loginerr" id="loginerr" hidden></p>
     <button class="btn" type="submit" id="loginbtn">로그인</button>
     <button class="linkbtn" type="button" id="modebtn">처음이세요? 계정 만들기</button>
+    <button class="linkbtn" type="button" id="forgotbtn">비밀번호를 잊었어요</button>
+    <p class="forgot" id="forgot" hidden>관리자(기홍)에게 말해 주세요. 관리자가 Firebase에서 그 계정을 지워 주면, <b>같은 아이디로 다시 가입</b>하면 돼요. 승인되면 예전에 보던 메뉴와 데이터를 그대로 쓸 수 있어요.</p>
   </form>
   <div class="card" id="waitcard" hidden>
     <h1>승인을 기다리고 있어요</h1>
@@ -534,7 +552,8 @@ $('bkin').onclick=()=>{
   // 가입 모드: 아이디·비밀번호를 정해서 직접 계정을 만들어요. 데이터는 허용된 아이디만 볼 수 있어요(firestore.rules).
   let signup=false;
   const setMode=on=>{
-    signup=on; showErr('');
+    signup=on; showErr(''); $('forgot').hidden=true; $('forgotbtn').hidden=on;
+    $('signname').hidden=!on; $('signname').required=on;
     $('loginpw2').hidden=!on; $('loginpw2').required=on; $('loginpw2').value='';
     $('loginpw').autocomplete=on?'new-password':'current-password';
     $('loginpw').placeholder=on?'비밀번호 (6자 이상)':'비밀번호';
@@ -542,6 +561,8 @@ $('bkin').onclick=()=>{
     $('modebtn').textContent=on?'이미 계정이 있어요 · 로그인':'처음이세요? 계정 만들기';
   };
   $('modebtn').onclick=()=>setMode(!signup);
+  $('forgotbtn').onclick=()=>{ $('forgot').hidden=!$('forgot').hidden; };
+  let signupName='';
   const errMsg=c=>c.includes('too-many-requests') ? '여러 번 시도해서 잠시 막혔어요. 조금 뒤에 다시 해 주세요.'
     : c.includes('network') ? '인터넷 연결을 확인해 주세요.'
     : c.includes('email-already-in-use') ? '이미 있는 아이디예요. 로그인해 주세요.'
@@ -557,6 +578,8 @@ $('bkin').onclick=()=>{
       if(!/^[a-z0-9][a-z0-9._-]{1,19}$/.test(id)) return showErr('아이디는 영문 소문자·숫자로 2~20자로 해 주세요.');
       if(pw.length<6) return showErr('비밀번호는 6자 이상으로 해 주세요.');
       if(pw!==$('loginpw2').value) return showErr('비밀번호 두 개가 서로 달라요.');
+      signupName=$('signname').value.trim().slice(0,20);
+      if(!signupName) return showErr('이름을 적어 주세요.');
     }
     const label=$('loginbtn').textContent;
     $('loginbtn').disabled=true; $('loginbtn').textContent=signup?'만드는 중…':'로그인 중…';
@@ -570,7 +593,29 @@ $('bkin').onclick=()=>{
   const gateShow=which=>{ $('loginform').hidden=which!=='login'; $('waitcard').hidden=which!=='wait'; };
   window.logout=()=>auth.signOut();
   window.denied=msg=>{ entered=false; me={admin:false,access:{}}; noAccess(); auth.signOut(); setMode(false); showErr(msg||'이 계정은 볼 권한이 없어요. 홍이 님께 말해 주세요.'); };
-  let meUnsub=null, entered=false;
+  let meUnsub=null, entered=false, myRef=null;
+  const showWho=(u,name,admin)=>{
+    const id=(u.email||'').split('@')[0];
+    $('who').replaceChildren(document.createTextNode(name||id),Object.assign(document.createElement('span'),{textContent:`${name?' · '+id:''} · ${admin?'관리자':'사용자'}`}));
+    $('acctbox').hidden=false;
+  };
+  $('nameedit').onclick=async()=>{
+    if(!myRef) return;
+    const n=prompt('사이트에 보일 이름을 적어 주세요.'); if(n==null||!n.trim()) return;
+    try{ await myRef.update({name:n.trim().slice(0,20)}); }catch(e){ alert('이름을 바꾸지 못했어요. 새로고침 후 다시 해 주세요.'); }
+  };
+  $('pwedit').onclick=()=>{ $('pwform').hidden=!$('pwform').hidden; $('pwmsg').hidden=true; };
+  $('pwform').onsubmit=async e=>{
+    e.preventDefault();
+    const m=$('pwmsg'), say=(t,ok)=>{ m.textContent=t; m.hidden=false; m.style.color=ok?'var(--accent)':''; };
+    const u=auth.currentUser, cur=$('pwcur').value, nw=$('pwnew').value;
+    if(nw.length<6) return say('새 비밀번호는 6자 이상으로 해 주세요.');
+    try{
+      await u.reauthenticateWithCredential(firebase.auth.EmailAuthProvider.credential(u.email,cur));
+      await u.updatePassword(nw);
+      $('pwcur').value=''; $('pwnew').value=''; say('비밀번호를 바꿨어요.',true);
+    }catch(err){ const c=err&&err.code||''; say(c.includes('wrong-password')||c.includes('invalid-credential')||c.includes('invalid-login')?'지금 비밀번호가 맞지 않아요.':errMsg(c)); }
+  };
   const enter=(u,m)=>{
     me=m; userId=u.uid;
     $('shell').hidden=false; $('gate').hidden=true; btn.hidden=false;
@@ -581,21 +626,30 @@ $('bkin').onclick=()=>{
   auth.onAuthStateChanged(u=>{
     if(meUnsub){ meUnsub(); meUnsub=null; }
     if(!u){
-      userId=null; entered=false; me={admin:false,access:{}}; noAccess();
+      userId=null; entered=false; me={admin:false,access:{}}; noAccess(); myRef=null; $('acctbox').hidden=true; $('pwform').hidden=true;
       $('shell').hidden=true; $('gate').hidden=false; btn.hidden=true; gateShow('login');
       tree=[]; render(); watch(); setTimeout(()=>$('loginid').focus(),0); return;
     }
     const email=(u.email||'').toLowerCase(), id=email.split('@')[0];
-    if(email===ADMIN_EMAIL){ enter(u,{admin:true,access:null}); return; }
+    const ref=myRef=fs.collection('users').doc(u.uid);
+    const joined=Date.parse(u.metadata&&u.metadata.creationTime)||Date.now();
+    if(email===ADMIN_EMAIL){
+      // 관리자는 언제나 모든 메뉴를 봐요. 사용자 목록에 보이도록 자기 문서도 하나 만들어 둬요.
+      enter(u,{admin:true,access:null}); showWho(u,'',true);
+      meUnsub=ref.onSnapshot(snap=>{
+        if(snap.exists) showWho(u,snap.data().name,true);
+        else if(!snap.metadata.fromCache) ref.set({id,email,name:signupName,status:'approved',createdAt:joined}).catch(()=>{});
+      },()=>{});
+      return;
+    }
     // 관리자가 아닌 사람은 users/{uid} 문서의 승인 상태와 메뉴 권한을 실시간으로 따라가요.
-    const ref=fs.collection('users').doc(u.uid);
     meUnsub=ref.onSnapshot(async snap=>{
       if(!snap.exists){
         if(snap.metadata.fromCache) return;
-        try{ await ref.set({id,email,status:'pending',createdAt:Date.now()}); }catch(e){ denied(); }
+        try{ await ref.set({id,email,name:signupName,status:'pending',createdAt:joined}); }catch(e){ denied(); }
         return;
       }
-      const d=snap.data();
+      const d=snap.data(); showWho(u,d.name,false);
       if(d.status==='approved') enter(u,{admin:false,access:d.access||{}});
       else if(d.status==='blocked') denied('이 계정은 사용이 막혀 있어요. 홍이 님께 말해 주세요.');
       else { userId=null; entered=false; me={admin:false,access:{}}; noAccess(); $('shell').hidden=true; $('gate').hidden=false; gateShow('wait'); $('waitid').textContent=id; }

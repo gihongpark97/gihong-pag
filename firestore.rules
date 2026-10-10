@@ -15,11 +15,14 @@ service cloud.firestore {
     // 사용자 목록: 본인은 자기 것만 읽고, 처음 한 번 '승인 대기'로만 만들 수 있어요. 승인·권한은 관리자만 바꿔요.
     match /users/{uid} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
-      allow create: if signedIn() && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['id', 'email', 'status', 'createdAt'])
+      allow create: if isAdmin() || (signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['id', 'email', 'name', 'status', 'createdAt'])
         && request.resource.data.status == 'pending'
-        && request.resource.data.email == request.auth.token.email;
-      allow update, delete: if isAdmin();
+        && request.resource.data.email == request.auth.token.email);
+      // 본인은 자기 이름만 바꿀 수 있어요.
+      allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']));
+      allow delete: if isAdmin();
     }
 
     // 할 일 목록: 문서 이름이 메뉴 key예요. 기홍 목록만 예전 이름 'tree'를 써요.
