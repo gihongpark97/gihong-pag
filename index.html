@@ -3,10 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>기홍이 할 일 나무</title>
+<title>기홍이 홈페이지</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
 <meta name="theme-color" content="#2f6b4f">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="기홍이">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6b4f'/%3E%3Cpath d='M9 16.5l4.5 4.5L23 11' stroke='white' stroke-width='3.2' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
 /* Layout: menu tree in a left sidebar (a slide-in drawer on phones), the selected list in a narrow column with branch lines like an outline. */
@@ -160,6 +164,7 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .wsubrow input,.wedit textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;min-width:0;width:100%}
 .wedit textarea{resize:vertical}
 .wx{color:var(--muted)}
+.backup{margin-top:24px;padding:12px 8px 0;border-top:1px solid var(--line);display:grid;gap:8px}
 .cnt{font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 .act{display:flex;gap:2px;flex:none}
 .ib{width:34px;height:34px;display:grid;place-items:center;border-radius:8px;color:var(--muted)}
@@ -182,6 +187,10 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 <aside class="side" id="side" aria-label="메뉴">
   <div class="brand">기홍이 홈페이지</div>
   <ul class="nav" id="nav"></ul>
+  <div class="backup">
+    <div class="llab">백업 (이 기기 데이터)</div>
+    <div class="lbtns"><button class="chip" id="bkout" type="button">파일로 저장</button><button class="chip" id="bkin" type="button">불러오기</button></div>
+  </div>
 </aside>
 <div class="scrim" id="scrim"></div>
 <main>
@@ -447,6 +456,7 @@ async function openList(key){
   if(current && LISTS[current].view){ const V=(window.VIEWS||{})[LISTS[current].view]; V && V.close(); }
   current=key; editing=null; addingTo=null;
   const L=LISTS[key];
+  try{ localStorage.setItem('hong.last',key); }catch(e){}
   $('todoview').hidden=!!L.view; $('loanview').hidden=!L.view;
   if(L.view){ if(unsub){ unsub(); unsub=null; } docRef=null; document.title=`${L.title||L.label} · 기홍이 홈페이지`; renderNav(); window.VIEWS[L.view].open($('loanview')); return; }
   $('crumb').textContent=L.path.slice(0,-1).join(' › ');
@@ -459,8 +469,29 @@ async function openList(key){
 window.getDb=()=>({fs,userId});
 window.addEventListener('hashchange',()=>openList(location.hash.slice(1)));
 
+/* ---------- 백업 ---------- */
+$('bkout').onclick=()=>{
+  const data={};
+  try{ for(let i=0;i<localStorage.length;i++){ const k=localStorage.key(i); if(/^hong/.test(k)) data[k]=localStorage.getItem(k); } }catch(e){}
+  const blob=new Blob([JSON.stringify({site:'gihong-pag.com',savedAt:new Date().toISOString(),data},null,1)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`기홍이홈페이지-백업-${new Date().toISOString().slice(0,10)}.json`; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+};
+$('bkin').onclick=()=>{
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,application/json';
+  inp.onchange=async()=>{
+    try{ const j=JSON.parse(await inp.files[0].text()); if(!j||!j.data) throw 0;
+      Object.entries(j.data).forEach(([k,v])=>{ if(/^hong/.test(k)) localStorage.setItem(k,v); });
+      location.reload();
+    }catch(e){ $('toastmsg').textContent='백업 파일을 읽지 못했어요. 이 사이트에서 저장한 .json 파일인지 확인해 주세요.'; $('undo').hidden=true; $('toast').hidden=false; setTimeout(()=>{$('toast').hidden=true;$('undo').hidden=false;},4000); }
+  };
+  inp.click();
+};
+
 (function boot(){
-  openList(location.hash.slice(1));
+  let start=location.hash.slice(1);
+  if(!start){ try{ start=localStorage.getItem('hong.last')||''; }catch(e){} }
+  openList(start);
   const cfg=window.FIREBASE_CONFIG;
   if(!window.firebase || !cfg || !cfg.apiKey){ setSync('이 기기에만 저장됨'); return; }
   $('shell').hidden=true;
