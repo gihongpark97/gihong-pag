@@ -91,6 +91,11 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .gate p{margin:0;color:var(--muted);font-size:.9rem}
 .gate input{text-align:left}
 .gate .loginerr{color:var(--danger)}
+.ulist{display:grid;gap:2px;margin-top:6px}
+.ucheck{display:flex;align-items:center;gap:10px;min-height:40px;font-size:.95rem;cursor:pointer}
+.ucheck input{width:18px;height:18px;accent-color:var(--accent)}
+.ubtns{display:flex;gap:8px;flex-wrap:wrap}
+.usec{font-size:1rem;margin:20px 0 10px;color:var(--muted)}
 .gate .linkbtn{background:none;border:0;color:var(--muted);font:inherit;font-size:.9rem;cursor:pointer;text-decoration:underline;padding:4px}
 .wrap.wide{max-width:980px}
 .lhead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:16px}
@@ -228,6 +233,7 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
   </div>
 </div>
 <div class="wrap wide" id="loanview" hidden></div>
+<div class="wrap" id="noaccess" hidden><div class="empty"><b>아직 볼 수 있는 메뉴가 없어요</b><span>관리자가 메뉴를 열어 주면 여기에 나타나요.</span><button class="chip" type="button" onclick="logout()">로그아웃</button></div></div>
 </main>
 </div>
 <div class="gate" id="gate" hidden>
@@ -241,6 +247,11 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
     <button class="btn" type="submit" id="loginbtn">로그인</button>
     <button class="linkbtn" type="button" id="modebtn">처음이세요? 계정 만들기</button>
   </form>
+  <div class="card" id="waitcard" hidden>
+    <h1>승인을 기다리고 있어요</h1>
+    <p><b id="waitid"></b> 계정이 만들어졌어요. 관리자가 승인하면 이 화면이 저절로 열려요.</p>
+    <button class="chip" type="button" onclick="logout()">로그아웃</button>
+  </div>
 </div>
 <div class="toast" id="toast" hidden><span id="toastmsg"></span><button id="undo">되돌리기</button></div>
 
@@ -250,6 +261,7 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 <script src="firebase-config.js"></script>
 <script src="loan.js"></script>
 <script src="wedding.js"></script>
+<script src="admin.js"></script>
 <script>
 const ICON = {
   chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -271,10 +283,17 @@ const MENU=[
     {key:'wedding-dday', label:'전날 준비물', title:'결혼식 전날 준비물', seed:'dday'},
     {key:'wedding-cost', label:'비용 정리', view:'weddingCost'},
   ]},
+  {label:'사용자 관리', key:'admin', view:'admin', adminOnly:true},  // 관리자에게만 보여요
 ];
+const ADMIN_EMAIL='gihong@gihong-pag.com';
 const LS_UI='hongtodo.ui';
 const LISTS={}; (function walk(items,path){ items.forEach(m=>{ const p=[...path,m.label]; if(m.key) LISTS[m.key]={...m,path:p}; if(m.children) walk(m.children,p); }); })(MENU,[]);
 let current=null;
+// 내가 볼 수 있는 메뉴. access가 null이면(로그인 없이 쓰는 경우) 전부 보여요.
+let me={admin:false, access:null};
+const allowed=k=>{ const L=LISTS[k]; if(!L) return false; if(L.adminOnly) return me.admin; return me.admin||me.access===null||!!me.access[k]; };
+const firstAllowed=()=>Object.keys(LISTS).find(allowed)||null;
+window.menuLeaves=()=>Object.values(LISTS).filter(L=>!L.adminOnly);
 const cacheKey=k=>LISTS[k].cache||('hongtodo.list.'+k);
 const ls = {
   get(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},
@@ -409,7 +428,8 @@ async function flush(){
 /* ---------- menu ---------- */
 function count(list){ return list.reduce((a,n)=>{const t=stats(n);a.all+=t.all;a.done+=t.done;return a},{all:0,done:0}); }
 function renderNav(){
-  const build=(items,path)=>items.map(m=>{
+  const visible=m=>m.key?allowed(m.key):m.children.some(visible);
+  const build=(items,path)=>items.filter(visible).map(m=>{
     const li=document.createElement('li'); const b=document.createElement('button');
     if(m.key){
       b.className='leafbtn'; b.textContent=m.label; if(m.key===current) b.setAttribute('aria-current','page');
@@ -450,14 +470,15 @@ function watch(){
     renderNav(); setSync('모든 기기에 저장됨');
   }, e=>{ if(e && e.code==='permission-denied') denied(); else setSync('동기화 끊김 · 새로고침해 주세요', true); });
 }
-async function openList(key){
-  if(!LISTS[key]) key='gihong';
-  if(key===current) return;
+async function openList(key,force){
+  if(!allowed(key)) key=firstAllowed();
+  if(!key){ noAccess(); return; }
+  if(key===current && !force) return;
   clearTimeout(saveTimer);
   while(saving) await new Promise(r=>setTimeout(r,100));
   if(dirty) await flush();
   if(current && LISTS[current].view){ const V=(window.VIEWS||{})[LISTS[current].view]; V && V.close(); }
-  current=key; editing=null; addingTo=null;
+  current=key; editing=null; addingTo=null; $('noaccess').hidden=true;
   const L=LISTS[key];
   try{ localStorage.setItem('hong.last',key); }catch(e){}
   $('todoview').hidden=!!L.view; $('loanview').hidden=!L.view;
@@ -468,6 +489,11 @@ async function openList(key){
   const cached=ls.get(cacheKey(key)); tree=Array.isArray(cached)?cached:(L.seed&&window.WEDDING_SEEDS?WEDDING_SEEDS[L.seed]():[]);
   loaded=true; render(); renderNav();
   if(fs && userId) watch(); else if(!fs) setSync('이 기기에만 저장됨');
+}
+function noAccess(){
+  if(current && LISTS[current].view){ const V=(window.VIEWS||{})[LISTS[current].view]; V && V.close(); }
+  if(unsub){ unsub(); unsub=null; } docRef=null; current=null;
+  $('todoview').hidden=true; $('loanview').hidden=true; $('noaccess').hidden=false; renderNav();
 }
 window.getDb=()=>({fs,userId});
 window.addEventListener('hashchange',()=>openList(location.hash.slice(1)));
@@ -494,9 +520,9 @@ $('bkin').onclick=()=>{
 (function boot(){
   let start=location.hash.slice(1);
   if(!start){ try{ start=localStorage.getItem('hong.last')||''; }catch(e){} }
-  openList(start);
   const cfg=window.FIREBASE_CONFIG;
-  if(!window.firebase || !cfg || !cfg.apiKey){ setSync('이 기기에만 저장됨'); return; }
+  if(!window.firebase || !cfg || !cfg.apiKey){ openList(start); setSync('이 기기에만 저장됨'); return; }
+  me={admin:false,access:{}};  // 로그인 전에는 아무 메뉴도 열지 않아요
   $('shell').hidden=true;
   firebase.initializeApp(cfg);
   const auth=firebase.auth(); fs=firebase.firestore();
@@ -520,6 +546,7 @@ $('bkin').onclick=()=>{
     : c.includes('network') ? '인터넷 연결을 확인해 주세요.'
     : c.includes('email-already-in-use') ? '이미 있는 아이디예요. 로그인해 주세요.'
     : c.includes('weak-password') ? '비밀번호는 6자 이상으로 해 주세요.'
+    : c.includes('configuration-not-found')||c.includes('internal-error') ? '아직 로그인 기능이 켜지지 않았어요. Firebase에서 Authentication을 시작해 주세요.'
     : c.includes('operation-not-allowed') || c.includes('admin-restricted') ? '지금은 계정을 만들 수 없게 설정돼 있어요.'
     : signup ? '계정을 만들지 못했어요. 다시 해 주세요.' : '아이디 또는 비밀번호가 맞지 않아요.';
   $('loginform').onsubmit=async e=>{
@@ -540,16 +567,39 @@ $('bkin').onclick=()=>{
     }catch(err){ showErr(errMsg(err&&err.code||'')); }
     $('loginbtn').disabled=false; $('loginbtn').textContent=label;
   };
-  window.denied=()=>{ auth.signOut(); setMode(false); showErr('이 아이디는 아직 들어올 수 있게 허용되지 않았어요. 홍이 님께 말해 주세요.'); };
-  auth.onAuthStateChanged(async u=>{
-    // 로그인은 됐어도 허용된 아이디인지 DB에 한 번 물어보고 나서 화면을 열어요.
-    if(u){ try{ await fs.collection('shared').doc('home').get(); }
-      catch(e){ if(e&&e.code==='permission-denied'){ denied(); return; } } }
-    userId=u?u.uid:null;
-    $('shell').hidden=!u; $('gate').hidden=!!u;
-    btn.hidden=!u;
-    if(!u){ tree=[]; render(); setTimeout(()=>$('loginid').focus(),0); }
-    watch();
+  const gateShow=which=>{ $('loginform').hidden=which!=='login'; $('waitcard').hidden=which!=='wait'; };
+  window.logout=()=>auth.signOut();
+  window.denied=msg=>{ entered=false; me={admin:false,access:{}}; noAccess(); auth.signOut(); setMode(false); showErr(msg||'이 계정은 볼 권한이 없어요. 홍이 님께 말해 주세요.'); };
+  let meUnsub=null, entered=false;
+  const enter=(u,m)=>{
+    me=m; userId=u.uid;
+    $('shell').hidden=false; $('gate').hidden=true; btn.hidden=false;
+    if(!entered){ entered=true; let want=location.hash.slice(1); if(!want){ try{ want=localStorage.getItem('hong.last')||''; }catch(e){} } openList(want,true); }
+    else if(!current || !allowed(current)) openList(firstAllowed(),true);
+    else renderNav();
+  };
+  auth.onAuthStateChanged(u=>{
+    if(meUnsub){ meUnsub(); meUnsub=null; }
+    if(!u){
+      userId=null; entered=false; me={admin:false,access:{}}; noAccess();
+      $('shell').hidden=true; $('gate').hidden=false; btn.hidden=true; gateShow('login');
+      tree=[]; render(); watch(); setTimeout(()=>$('loginid').focus(),0); return;
+    }
+    const email=(u.email||'').toLowerCase(), id=email.split('@')[0];
+    if(email===ADMIN_EMAIL){ enter(u,{admin:true,access:null}); return; }
+    // 관리자가 아닌 사람은 users/{uid} 문서의 승인 상태와 메뉴 권한을 실시간으로 따라가요.
+    const ref=fs.collection('users').doc(u.uid);
+    meUnsub=ref.onSnapshot(async snap=>{
+      if(!snap.exists){
+        if(snap.metadata.fromCache) return;
+        try{ await ref.set({id,email,status:'pending',createdAt:Date.now()}); }catch(e){ denied(); }
+        return;
+      }
+      const d=snap.data();
+      if(d.status==='approved') enter(u,{admin:false,access:d.access||{}});
+      else if(d.status==='blocked') denied('이 계정은 사용이 막혀 있어요. 홍이 님께 말해 주세요.');
+      else { userId=null; entered=false; me={admin:false,access:{}}; noAccess(); $('shell').hidden=true; $('gate').hidden=false; gateShow('wait'); $('waitid').textContent=id; }
+    }, e=>denied());
   });
 })();
 </script>

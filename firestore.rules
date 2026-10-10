@@ -1,17 +1,34 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 사이트에서 누구나 계정을 만들 수는 있지만, 아래 목록에 있는 아이디로 로그인한 사람만 데이터를 보고 고칠 수 있어요.
-    // 사람을 추가하려면 목록에 '아이디@gihong-pag.com'을 넣고 규칙을 다시 게시하세요.
-    function isMember() {
-      return request.auth != null
-        && request.auth.token.email in [
-          'gihong@gihong-pag.com',
-          'jiyeon@gihong-pag.com'
-        ];
+    // 누구나 사이트에서 계정을 만들 수 있지만, 관리자(gihong)가 승인하고
+    // 메뉴를 열어 준 사람만 그 메뉴의 데이터를 보고 고칠 수 있어요.
+    function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && request.auth.token.email == 'gihong@gihong-pag.com'; }
+    function meDoc() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function can(key) {
+      return isAdmin() || (signedIn() && exists(meDoc())
+        && get(meDoc()).data.status == 'approved'
+        && get(meDoc()).data.get('access', {}).get(key, false) == true);
     }
-    match /shared/{document=**} {
-      allow read, write: if isMember();
+
+    // 사용자 목록: 본인은 자기 것만 읽고, 처음 한 번 '승인 대기'로만 만들 수 있어요. 승인·권한은 관리자만 바꿔요.
+    match /users/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['id', 'email', 'status', 'createdAt'])
+        && request.resource.data.status == 'pending'
+        && request.resource.data.email == request.auth.token.email;
+      allow update, delete: if isAdmin();
+    }
+
+    // 할 일 목록: 문서 이름이 메뉴 key예요. 기홍 목록만 예전 이름 'tree'를 써요.
+    match /shared/home/lists/{list} {
+      allow read, write: if can(list) || (list == 'tree' && can('gihong'));
+    }
+    // 대출계산기(loan), 결혼 비용(wedding-cost)
+    match /shared/home/pages/{page} {
+      allow read, write: if can(page);
     }
   }
 }
