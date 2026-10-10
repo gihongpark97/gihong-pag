@@ -139,6 +139,27 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .lnotes{font-size:.8rem;color:var(--muted);padding-left:18px;display:grid;gap:4px}
 @media (max-width:480px){.lcols{grid-template-columns:1fr}}
 @media (min-width:1100px){.lgroup{grid-template-columns:1fr 1fr}.lgroup h3{grid-column:1/-1}}
+.wtiles{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.wtiles .ltile{padding:10px 12px}
+.wtiles .ltt b{font-size:.8rem;overflow-wrap:anywhere}
+.wtiles .wbig{font-size:clamp(.85rem,3.6vw,1.3rem);font-weight:600;font-variant-numeric:tabular-nums;margin-bottom:2px}
+.wtot{font-weight:600;font-variant-numeric:tabular-nums}
+.wlist{display:grid}
+.witem{border-top:1px solid var(--line);padding-block:8px}
+.wrow{display:flex;justify-content:space-between;gap:12px;width:100%;text-align:left;padding:6px 0;border-radius:6px}
+.wrow:hover .wname{color:var(--accent)}
+.wname{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.wamt{font-variant-numeric:tabular-nums;white-space:nowrap}.wamt.zero{color:var(--muted)}
+.wsubs{list-style:none;margin:0;padding:0 0 0 12px;display:grid;gap:2px}
+.wsubs li{display:flex;justify-content:space-between;gap:12px;font-size:.85rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.wmemo-t{font-size:.8rem;color:var(--accent);padding:4px 0}
+.wmemo p{margin:0;white-space:pre-line;font-size:.85rem;color:var(--muted);background:var(--bg);border-radius:8px;padding:8px 10px}
+.wedit{display:grid;gap:10px;border:1px solid var(--accent);border-radius:12px;padding:12px;margin-block:8px}
+.wsubedit{display:grid;gap:6px}
+.wsubrow{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto 52px auto;gap:6px;align-items:center}
+.wsubrow input,.wedit textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;min-width:0;width:100%}
+.wedit textarea{resize:vertical}
+.wx{color:var(--muted)}
 .cnt{font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 .act{display:flex;gap:2px;flex:none}
 .ib{width:34px;height:34px;display:grid;place-items:center;border-radius:8px;color:var(--muted)}
@@ -216,6 +237,7 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="firebase-config.js"></script>
 <script src="loan.js"></script>
+<script src="wedding.js"></script>
 <script>
 const ICON = {
   chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -232,6 +254,11 @@ const MENU=[
     ]},
   ]},
   {label:'대출계산기', key:'loan', view:'loan'},
+  {label:'결혼', children:[
+    {key:'wedding-check', label:'준비 체크', title:'결혼 준비 체크', seed:'check'},
+    {key:'wedding-dday', label:'전날 준비물', title:'결혼식 전날 준비물', seed:'dday'},
+    {key:'wedding-cost', label:'비용 정리', view:'weddingCost'},
+  ]},
 ];
 const LS_UI='hongtodo.ui';
 const LISTS={}; (function walk(items,path){ items.forEach(m=>{ const p=[...path,m.label]; if(m.key) LISTS[m.key]={...m,path:p}; if(m.children) walk(m.children,p); }); })(MENU,[]);
@@ -397,7 +424,7 @@ let fs=null, userId=null, unsub=null;
 function watch(){
   if(unsub){ unsub(); unsub=null; }
   docRef=null;
-  if(LISTS[current] && LISTS[current].view){ window.Loan && Loan.sync(); return; }
+  if(LISTS[current] && LISTS[current].view){ const V=(window.VIEWS||{})[LISTS[current].view]; V && V.sync(); return; }
   if(!fs || !userId) return;
   const L=LISTS[current], ref=fs.collection('shared').doc('home').collection('lists').doc(L.doc||L.key), key=current;  // 등록된 사람 모두가 같은 목록을 봐요
   docRef=ref; setSync('불러오는 중…');
@@ -417,15 +444,15 @@ async function openList(key){
   clearTimeout(saveTimer);
   while(saving) await new Promise(r=>setTimeout(r,100));
   if(dirty) await flush();
-  if(current && LISTS[current].view && window.Loan) Loan.close();
+  if(current && LISTS[current].view){ const V=(window.VIEWS||{})[LISTS[current].view]; V && V.close(); }
   current=key; editing=null; addingTo=null;
   const L=LISTS[key];
   $('todoview').hidden=!!L.view; $('loanview').hidden=!L.view;
-  if(L.view){ if(unsub){ unsub(); unsub=null; } docRef=null; document.title=`${L.label} · 기홍이 홈페이지`; renderNav(); Loan.open($('loanview')); return; }
+  if(L.view){ if(unsub){ unsub(); unsub=null; } docRef=null; document.title=`${L.title||L.label} · 기홍이 홈페이지`; renderNav(); window.VIEWS[L.view].open($('loanview')); return; }
   $('crumb').textContent=L.path.slice(0,-1).join(' › ');
-  $('title').textContent=`${L.label}의 할 일`;
-  document.title=`${L.label}의 할 일 · 기홍이 홈페이지`;
-  const cached=ls.get(cacheKey(key)); tree=Array.isArray(cached)?cached:[];
+  $('title').textContent=L.title||`${L.label}의 할 일`;
+  document.title=`${L.title||L.label+'의 할 일'} · 기홍이 홈페이지`;
+  const cached=ls.get(cacheKey(key)); tree=Array.isArray(cached)?cached:(L.seed&&window.WEDDING_SEEDS?WEDDING_SEEDS[L.seed]():[]);
   loaded=true; render(); renderNav();
   if(fs && userId) watch(); else if(!fs) setSync('이 기기에만 저장됨');
 }

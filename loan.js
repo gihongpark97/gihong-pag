@@ -334,4 +334,5 @@ window.Loan={
   sync(){ if(root) sync(); },
   calc, DEFAULTS, // 확인용
 };
+window.VIEWS=Object.assign(window.VIEWS||{},{loan:window.Loan});
 })();
