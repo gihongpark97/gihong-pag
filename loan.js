@@ -9,6 +9,8 @@ const TERMS=[10,15,20,30];
 // 상품 기준값 (엑셀 2026-09-30 기준, 화면에서 고칠 수 있어요)
 const DEFAULTS={
   base:{married:'미혼', first:true, age30:true, incG:0, incJ:0, cash:0, debt:0, term:30},
+  // 빠른 계산: 집값만 넣으면 상품별 대출·월 상환액을 보여줘요. borrow가 0이면 최대한도로 빌려요.
+  quick:{price:0, borrow:0, method:'원리금균등', region:REGIONS[1], area:0},
   cost:{tax:0.011, relief:2000000, broker:0.0044, fixed:3000000},
   bang:[55000000,48000000,28000000,25000000],
   bog:{capSingle:70000000, capMarried:85000000, priceCap:600000000, limitGen:360000000, limitFirst:420000000,
@@ -26,6 +28,8 @@ function merge(d,s){ if(s==null||typeof s!=='object'||Array.isArray(d)) return s
 
 let state={settings:clone(DEFAULTS), listings:[]};
 let root=null, ref=null, unsub=null, saveT=null, saving=false, pending=false, editingId=null, showSettings=false;
+const TABS={bog:'보금자리론',did:'디딤돌',cmp:'매물 비교'};
+let tab=(()=>{ try{ const t=localStorage.getItem('hong.loan.tab'); return TABS[t]?t:'bog'; }catch(e){ return 'bog'; } })();
 
 /* ---------- 계산 ---------- */
 const pmt=(r,n,pv)=>pv<=0?0:(r===0?pv/n:pv*r/(1-Math.pow(1+r,-n)));
@@ -80,7 +84,36 @@ function calc(S){
     else best='현금 부족';
     return {fee:f,loanB,cashB,monB,dSt,loanD,cashD,monD,best};
   }
-  return {income,gRate,gOk,gMax,gMaxPrice,dRate,dStatus,dMax,dMaxPrice,listing};
+  // 빠른 계산: 집값 P 하나로 상품별 결과
+  function quick(kind,Q){
+    const P=+Q.price||0, isB=kind==='bog';
+    const rate=isB?gRate:dRate, f=P?fee(P):0;
+    const checks=[];
+    if(isB){
+      checks.push([`소득 ${eok(gCap)} 이하`,income<=gCap]);
+      if(P) checks.push([`집값 ${eok(g.priceCap)} 이하`,P<=g.priceCap]);
+    } else {
+      checks.push([`소득 ${eok(dCap)} 이하`,income<=dCap]);
+      if(!married) checks.push(['만 30세 이상 (미혼 단독세대주)',!!b.age30]);
+      if(P) checks.push([`집값 ${eok(d.priceCap)} 이하`,P<=d.priceCap]);
+      if(+Q.area) checks.push([`전용 ${d.area}㎡ 이하`,+Q.area<=d.area]);
+    }
+    const ok=checks.every(c=>c[1]);
+    const bang=!isB&&d.bang?bangOf(Q.region):0;
+    const ltvCap=P?Math.max(0,P*(isB?g.ltv:d.ltv)-bang):null;
+    const limit=isB?gLimit:dLimit, dtiCap=isB?gDti:dDti;
+    const caps=[['상품 한도',limit],['소득 기준(DTI)',dtiCap]]; if(ltvCap!=null) caps.unshift([isB?`집값의 ${pct(g.ltv)}`:`집값의 ${pct(d.ltv)}${bang?' − 방공제':''}`,ltvCap]);
+    const max=ok?Math.max(0,Math.min(...caps.map(c=>c[1]))):0;
+    const loan=+Q.borrow>0?Math.min(+Q.borrow,max):max;
+    const r=rate/12;
+    let first,last,interest;
+    if(Q.method==='원금균등'){ const pr=loan/n; first=pr+loan*r; last=pr+pr*r; interest=loan*r*(n+1)/2; }
+    else { first=last=pmt(r,n,loan); interest=first*n-loan; }
+    const need=P?P+f-loan:null;
+    return {ok,checks,caps,max,loan,rate,first,last,interest,fee:f,bang,need,left:need==null?null:b.cash-need,
+      share:income?first*12/income:null};
+  }
+  return {income,gRate,gOk,gMax,gMaxPrice,dRate,dStatus,dMax,dMaxPrice,listing,quick,married};
 }
 
 /* ---------- 표시 도우미 ---------- */
@@ -149,6 +182,14 @@ function field(label,path,kind,opts){
 function render(){
   if(!root) return;
   const S=state.settings, R=calc(S), married=S.base.married==='신혼';
+  const tabs=el('div',{class:'ltabs',role:'tablist'},...Object.entries(TABS).map(([k,v])=>el('button',{type:'button',role:'tab','aria-selected':String(tab===k),class:'ltab',onclick:()=>{ tab=k; try{ localStorage.setItem('hong.loan.tab',k); }catch(e){} render(); }},v)));
+  if(tab!=='cmp'){
+    root.replaceChildren(el('div',{class:'lhead'},
+      el('div',{},el('div',{class:'crumb'},'대출계산기'),el('h1',{},TABS[tab]),el('div',{class:'sum'},tab==='bog'?'주택금융공사 정책 대출 · 고정금리':'주택도시기금 정책 대출 · 소득별 금리')),
+      el('div',{class:'acct'},el('div',{class:'sync',id:'loansync'}))),tabs,quickView(tab,S,R));
+    setStatus(ref?'모든 기기에 저장됨':(window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.apiKey?'불러오는 중…':'이 기기에만 저장됨'));
+    return;
+  }
   const top=el('div',{class:'lhead'},
     el('div',{},el('div',{class:'crumb'},'대출계산기'),el('h1',{},'매물별 대출 비교'),
       el('div',{class:'sum'},`심사 소득 ${eok(R.income)} · 보유 현금 ${eok(S.base.cash)} · ${S.base.term}년 원리금균등`)),
@@ -190,8 +231,53 @@ function render(){
       el('li',{},'전용면적을 비워 두면 디딤돌 면적 요건은 확인하지 않고 "가능(면적 확인)"으로 보여요.'),
       el('li',{},'금리·한도는 2026년 9월 30일 기준이에요. 신청 전에 기금e든든과 주택금융공사에서 꼭 다시 확인하세요.')));
 
-  root.replaceChildren(...[top,tiles,basics,el('div',{class:'ltools'},toggle),settings,list].filter(Boolean));
+  root.replaceChildren(...[top,tabs,tiles,basics,el('div',{class:'ltools'},toggle),settings,list].filter(Boolean));
   setStatus(ref?'모든 기기에 저장됨':(window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.apiKey?'불러오는 중…':'이 기기에만 저장됨'));
+}
+function quickView(kind,S,R){
+  const Q=S.quick, married=S.base.married==='신혼', q=R.quick(kind,Q), isB=kind==='bog';
+  const inputs=el('section',{class:'lcard'},el('h2',{},'입력'),
+    el('div',{class:'lgrid'},
+      field('집값 (매매가)','quick.price','won'),
+      field('혼인 상태','base.married','sel',['미혼','신혼']),
+      field(married?'기홍 연소득':'연소득 (세전)','base.incG','won'),
+      married?field('지연 연소득','base.incJ','won'):null,
+      field('생애최초 주택구입','base.first','yn'),
+      isB?null:field('만 30세 이상','base.age30','yn'),
+      field('대출 기간 (년)','base.term','sel',TERMS),
+      field('상환 방식','quick.method','sel',['원리금균등','원금균등']),
+      field('보유 현금','base.cash','won'),
+      isB?null:field('지역 (방공제)','quick.region','sel',REGIONS),
+      isB?null:field('전용면적 (㎡, 모르면 비움)','quick.area','num'),
+      field('빌릴 금액 (비우면 최대)','quick.borrow','won'),
+      field('기존 대출 연간 원리금','base.debt','won')),
+    el('p',{class:'lnote'},married?'신혼: 혼인 7년 이내, 부부 합산 소득으로 심사해요.':'미혼: 기홍 단독 명의 기준이에요.'));
+  const big=(label,value,sub,cls)=>el('div',{class:'lbig'+(cls?' '+cls:'')},el('span',{class:'llab'},label),el('b',{},value),sub?el('span',{class:'lsub'},sub):null);
+  const P=+Q.price;
+  const head=el('div',{class:'lbar'},el('h2',{},'결과'),el('span',{class:'pill '+(q.ok?'good':'bad')},q.ok?'신청 가능':'조건 안 맞음'));
+  const result=el('section',{class:'lcard lresult'},head,
+    el('div',{class:'lbigs'},
+      big('월 상환액',q.loan?won(q.first):'-',Q.method==='원금균등'&&q.loan?`첫 달 기준 · 마지막 달 ${won(q.last)}`:(q.loan?`${S.base.term}년 동안 매달 같은 금액`:null),'main'),
+      big('대출 금액',q.loan?eok(q.loan):'-',q.max&&+Q.borrow>0&&q.loan<q.max?`최대 ${eok(q.max)}까지 가능`:(q.max?'최대한도 기준':null)),
+      big('적용 금리',pct(q.rate),isB?(married?'신혼 우대 반영':'고정금리'):'소득·기간별 금리 + 우대'),
+      big('총 이자',q.loan?eok(q.interest):'-',q.loan?`${S.base.term}년 동안`:null)),
+    P?el('dl',{class:'ldl'},
+      el('dt',{},'집값'),el('dd',{},eok(P)),
+      el('dt',{},'취득세·중개·등기 등 부대비용'),el('dd',{},eok(q.fee)),
+      el('dt',{},'대출'),el('dd',{},'− '+eok(q.loan)),
+      el('dt',{},el('b',{},'내 돈이 필요한 금액')),el('dd',{},el('b',{},eok(q.need))),
+      el('dt',{},'보유 현금과 비교'),el('dd',{class:q.left>=0?'plus':'minus'},S.base.cash?(q.left>=0?`${eok(q.left)} 남아요`:`${eok(-q.left)} 모자라요`):'보유 현금을 넣어 주세요'),
+      q.share!=null&&q.loan?[el('dt',{},'연소득 대비 상환 부담'),el('dd',{class:q.share>0.4?'minus':''},pct(q.share))]:null)
+     :el('p',{class:'lnote'},'집값을 넣으면 필요한 현금과 대출 한도가 집값 기준으로 계산돼요.'),
+    el('div',{},el('h3',{},'자격 확인'),el('ul',{class:'lchecks'},...q.checks.map(([t,ok])=>el('li',{class:ok?'ok':'no'},(ok?'✓ ':'✕ ')+t)))),
+    q.ok?el('div',{},el('h3',{},'대출 한도는 이 중 가장 작은 값이에요'),el('dl',{class:'ldl'},...q.caps.flatMap(([k,v])=>[el('dt',{},k),el('dd',{class:v===q.max?'pick':''},eok(v))]))):null);
+  const other=R.quick(isB?'did':'bog',Q);
+  const cmp=el('p',{class:'lnote lcmp'},
+    `같은 조건으로 ${isB?'디딤돌':'보금자리론'}은 `,
+    other.ok&&other.loan?el('b',{},`월 ${won(other.first)} (대출 ${eok(other.loan)}, 금리 ${pct(other.rate)})`):el('b',{},'조건이 안 맞아요'),
+    ' · ',el('button',{class:'linkbtn',type:'button',onclick:()=>{ tab=isB?'did':'bog'; try{ localStorage.setItem('hong.loan.tab',tab); }catch(e){} render(); }},`${isB?'디딤돌':'보금자리론'} 보기`));
+  return el('div',{class:'lquick'},inputs,el('div',{},result,cmp,
+    el('p',{class:'lnote'},'금리·한도는 2026년 9월 30일 기준이에요. 상품 조건은 "매물 비교" 탭에서 고칠 수 있어요. 신청 전에 꼭 기금e든든·주택금융공사에서 다시 확인하세요.')));
 }
 function tile(name,status,ok,pairs){
   return el('div',{class:'ltile'},el('div',{class:'ltt'},el('b',{},name),el('span',{class:'pill '+(ok?'good':'bad')},status)),

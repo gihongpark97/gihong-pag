@@ -152,6 +152,24 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .pill.did{background:var(--accent-soft);color:var(--accent)}
 .pill.bog{background:var(--blue-soft);color:var(--blue)}
 .ltools{margin-bottom:14px}
+.ltabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px;overflow-x:auto}
+.ltab{padding:10px 14px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.ltab[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+.lquick{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:14px;align-items:start}
+@media (max-width:860px){.lquick{grid-template-columns:1fr}}
+.lquick .lcard{margin-bottom:0}
+.lresult{gap:16px}
+.lbigs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.lbig{display:grid;gap:2px;background:var(--bg);border-radius:12px;padding:12px 14px;min-width:0}
+.lbig b{font-size:1.3rem;font-variant-numeric:tabular-nums}
+.lbig.main{grid-column:1/-1;background:var(--accent-soft)}.lbig.main b{font-size:1.8rem;color:var(--accent)}
+.lsub{font-size:.8rem;color:var(--muted)}
+.ldl{display:grid;grid-template-columns:1fr auto;gap:6px 12px;margin:0}
+.ldl dt{color:var(--muted);font-size:.9rem}.ldl dd{margin:0;text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.ldl dd.plus{color:var(--accent)}.ldl dd.minus{color:var(--danger)}.ldl dd.pick{color:var(--accent)}
+.lchecks{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px;font-size:.9rem}
+.lchecks .ok{color:var(--accent)}.lchecks .no{color:var(--danger)}
+.lcmp{margin:10px 0}.lcmp .linkbtn{background:none;border:0;color:var(--accent);text-decoration:underline;cursor:pointer;font:inherit;padding:0}
 .lbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px}
 .lbtns{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .lgroup{display:grid;gap:10px;margin-bottom:18px}
