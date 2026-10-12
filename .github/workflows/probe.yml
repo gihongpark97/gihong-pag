@@ -1,0 +1,16 @@
+name: probe-news-proxies
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          Q='%EC%82%BC%EC%84%B1%EC%A0%84%EC%9E%90'
+          G="https://news.google.com/rss/search?q=$Q&hl=ko&gl=KR&ceid=KR:ko"
+          GE=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$G")
+          for u in "$G" "https://api.allorigins.win/raw?url=$GE" "https://api.allorigins.win/get?url=$GE" "https://corsproxy.io/?url=$GE" "https://api.codetabs.com/v1/proxy?quest=$GE" "https://api.rss2json.com/v1/api.json?rss_url=$GE" "https://api.gdeltproject.org/api/v2/doc/doc?query=$Q&mode=artlist&format=json&maxrecords=3" "https://thingproxy.freeboard.io/fetch/$G" "https://proxy.cors.sh/$G" "https://cors.eu.org/$G"; do
+            echo "=== $u"
+            curl -s -m 25 -D h.txt -o b.txt -H "Origin: https://gihong-pag.com" "$u"; echo "exit $?"
+            grep -iE "^HTTP|access-control-allow-origin" h.txt
+            head -c 300 b.txt | tr '\n' ' '; echo
+          done
