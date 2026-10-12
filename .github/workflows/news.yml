@@ -1,0 +1,25 @@
+name: 관심 뉴스 모으기
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: news
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 뉴스 모으기
+        env:
+          FALLBACK_KEYWORDS: 로켓랩,삼성전자
+        run: python3 scripts/collect_news.py
+      - name: news-data 브랜치에 올리기
+        run: |
+          mkdir out && mv news.json out/ && cd out
+          git init -q -b news-data
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add news.json && git commit -qm "뉴스 갱신 $(date -u +%FT%TZ)"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" news-data
