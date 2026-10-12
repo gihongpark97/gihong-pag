@@ -4,7 +4,8 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - run: |
+      - shell: bash {0}
+        run: |
           Q='%EC%82%BC%EC%84%B1%EC%A0%84%EC%9E%90'
           G="https://news.google.com/rss/search?q=$Q&hl=ko&gl=KR&ceid=KR:ko"
           GE=$(python3 -c "import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=''))" "$G")
