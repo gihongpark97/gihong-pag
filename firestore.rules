@@ -29,6 +29,11 @@ service cloud.firestore {
     match /shared/home/lists/{list} {
       allow read, write: if can(list) || (list == 'tree' && can('gihong'));
     }
+    // 관심 뉴스 키워드 이름 목록: 뉴스를 모으는 GitHub 작업이 로그인 없이 읽어요. 쓰기는 주식 메뉴 권한이 있어야 해요.
+    match /public/stocks {
+      allow read: if true;
+      allow write: if can('stocks');
+    }
     // 대출계산기(loan), 결혼 비용(wedding-cost)
     match /shared/home/pages/{page} {
       allow read, write: if can(page);
