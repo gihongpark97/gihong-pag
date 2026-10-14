@@ -1,5 +1,5 @@
 /* 부동산 > 임장 체크리스트: 집 보러 갈 때 현장에서 하나씩 체크하는 목록. 한 번에 한 집, 다 보면 "다음 집용으로 초기화".
-   저장 위치: Firestore shared/home/pages/imjang = {state:{'c-섹션-항목':true, 'h-name'/'h-price'/'h-memo':'…'}, updatedAt}
+   저장 위치: Firestore shared/home/pages/imjang = {state:{'c-섹션-항목':true, 'h-name'/'h-price'/'h-memo':'…', 'n-섹션-항목':'항목별 비고'}, updatedAt}
    로그인 없이 쓰면 이 기기(localStorage 'hong.imjang', 백업에도 들어가요)에만 저장돼요. 원본: 홍이 님이 준 "아파트 임장 체크리스트.html" */
 (function(){
 const DATA=[
@@ -179,7 +179,7 @@ function render(){
  DATA.forEach(([title,items],si)=>{
   h+=`<details class="im-sec"${si<2?' open':''}><summary><span>${esc(title)}</span><span class="im-meta" id="im-meta-${si}"></span></summary><div class="im-items">`;
   items.forEach(([t,key,hint],ii)=>{const id=`c-${si}-${ii}`;
-   h+=`<label class="im-item${key?' key':''}" for="${id}"><input type="checkbox" id="${id}" data-c="${id}"><span class="im-txt"><b>${esc(t)}</b>${hint?`<small>${esc(hint)}</small>`:''}</span></label>`});
+   h+=`<div class="im-item${key?' key':''}"><label class="im-chk" for="${id}"><input type="checkbox" id="${id}" data-c="${id}"><span class="im-txt"><b>${esc(t)}</b>${hint?`<small>${esc(hint)}</small>`:''}</span></label><input type="text" class="im-note-in" id="n-${si}-${ii}" data-n="n-${si}-${ii}" placeholder="비고" aria-label="${esc(t)} 비고"></div>`});
   h+=`</div></details>`;
  });
  h+=`</div><div class="im-actions"><button class="chip del" type="button" id="im-reset">다음 집용으로 초기화</button></div>
@@ -191,7 +191,8 @@ function render(){
 // 화면은 그대로 두고 값만 다시 채워요 (다른 기기에서 바뀐 내용 반영, 입력 중인 칸은 건드리지 않아요)
 function fill(){
  FIELDS.forEach(id=>{const el=$(id); if(el&&el!==document.activeElement) el.value=state[id]||"";});
- root.querySelectorAll('.im-item input').forEach(c=>c.checked=!!state[c.dataset.c]);
+ root.querySelectorAll('.im-chk input').forEach(c=>c.checked=!!state[c.dataset.c]);
+ root.querySelectorAll('.im-note-in').forEach(el=>{ if(el!==document.activeElement) el.value=state[el.dataset.n]||""; });
  update();
 }
 function update(){
@@ -204,6 +205,8 @@ function update(){
 function bind(){
  root.querySelector('.im-list').addEventListener('change',e=>{const id=e.target.dataset.c;if(!id)return;
   if(e.target.checked) state[id]=true; else delete state[id]; update(); save();});
+ root.querySelector('.im-list').addEventListener('input',e=>{const id=e.target.dataset.n;if(!id)return;
+  if(e.target.value) state[id]=e.target.value; else delete state[id]; save();});
  FIELDS.forEach(id=>$(id).addEventListener('input',e=>{state[id]=e.target.value;save();}));
  const cf=$('im-confirm');
  $('im-reset').onclick=()=>{cf.hidden=false};
