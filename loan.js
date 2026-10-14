@@ -13,7 +13,8 @@ const DEFAULTS={
   // kb: KB시세(0이면 매매가로 LTV 계산)
   quick:{price:0, kb:0, borrow:0, method:'원리금균등', region:REGIONS[1], area:0},
   // 신용대출: 모자란 돈을 채울 때. 한도 = min(연소득×배수, DSR 여유). DSR은 신용대출을 만기 5년으로 나눠 계산해요.
-  credit:{rate:0.05, mult:1, dsr:0.4, years:5},
+  // first: 주담대 실행 전에 신용대출을 먼저 받는지
+  credit:{rate:0.05, mult:1, dsr:0.4, years:5, first:true},
   // 회사대출(사내 주택자금 등): 필요한 현금을 먼저 채우고, 월 납입액에 더해요. dsr이 참이면 신용대출 DSR 계산에도 넣어요.
   company:{amount:0, rate:0.02, years:5, dsr:true},
   // 시세 조회: 공공데이터 인증키, 마지막 검색어, 직접 적어 둔 KB시세(단지별)
@@ -109,25 +110,45 @@ function calc(S){
     const bang=!isB&&d.bang?bangOf(Q.region):0;
     const K=+Q.kb||0, base=K?(P?Math.min(P,K):K):P, useKb=K>0&&(!P||K<P);
     const ltvCap=base?Math.max(0,base*(isB?g.ltv:d.ltv)-bang):null;
-    const limit=isB?gLimit:dLimit, dtiCap=isB?gDti:dDti;
-    const caps=[['상품 한도',limit],['소득 기준(DTI)',dtiCap]]; if(ltvCap!=null) caps.unshift([`${useKb?'KB시세':'집값'}의 ${pct(isB?g.ltv:d.ltv)}${!isB&&bang?' − 방공제':''}`,ltvCap]);
-    const max=ok?Math.max(0,Math.min(...caps.map(c=>c[1]))):0;
-    const loan=+Q.borrow>0?Math.min(+Q.borrow,max):max;
-    const r=rate/12;
-    let first,last,interest;
-    if(Q.method==='원금균등'){ const pr=loan/n; first=pr+loan*r; last=pr+pr*r; interest=loan*r*(n+1)/2; }
-    else { first=last=pmt(r,n,loan); interest=first*n-loan; }
+    const limit=isB?gLimit:dLimit, per1=isB?gPer1:dPer1, dtiRate=isB?g.dti:d.dti;
+    const ltvLabel=`${useKb?'KB시세':'집값'}의 ${pct(isB?g.ltv:d.ltv)}${!isB&&bang?' − 방공제':''}`;
     const Co=S.company, coAmt=+Co.amount||0, coMonthly=coAmt?pmt(Co.rate/12,Math.max(1,Co.years)*12,coAmt):0;
-    const need=P?P+f-loan-coAmt:null, left=need==null?null:b.cash-need;
-    // 신용대출: DSR = (모든 대출 연 원리금) ÷ 연소득. 주담대 첫해 원리금과 기존 대출을 빼고 남는 만큼.
-    const C=S.credit, perWon=1/C.years+C.rate;
-    const byIncome=income*C.mult, byDsr=Math.max(0,(income*C.dsr-first*12-(Co.dsr?coMonthly*12:0)-b.debt)/perWon);
-    const creditMax=Math.max(0,Math.min(byIncome,byDsr));
-    const creditNeed=left!=null&&left<0?-left:0, creditUse=Math.min(creditNeed,creditMax);
-    return {ok,checks,caps,max,loan,rate,first,last,interest,fee:f,bang,need,left,useKb,
+    const C=S.credit, perWon=1/C.years+C.rate, coDsr=Co.dsr?coMonthly*12:0;
+    // 주담대: extra는 DTI에 더 잡힐 다른 대출의 1년 상환액(먼저 받은 신용대출 이자)
+    function mortgage(extra){
+      const dtiCap=Math.max(0,(income*dtiRate-b.debt-extra)/per1);
+      const caps=[['상품 한도',limit],['소득 기준(DTI)',dtiCap]]; if(ltvCap!=null) caps.unshift([ltvLabel,ltvCap]);
+      const max=ok?Math.max(0,Math.min(...caps.map(c=>c[1]))):0;
+      const loan=+Q.borrow>0?Math.min(+Q.borrow,max):max;
+      const r=rate/12; let first,last,interest;
+      if(Q.method==='원금균등'){ const pr=loan/n; first=pr+loan*r; last=pr+pr*r; interest=loan*r*(n+1)/2; }
+      else { first=last=pmt(r,n,loan); interest=first*n-loan; }
+      return {caps,max,loan,first,last,interest};
+    }
+    // 신용대출 DSR = (모든 대출 1년 원리금) ÷ 연소득. 신용대출은 C.years 만기로 나눠 갚는다고 봐요.
+    // 보금자리론·디딤돌은 새로 받을 땐 DSR을 안 보지만, 이미 받은 뒤 신용대출을 받으면 DSR에 들어가요.
+    // 그래서 신용대출을 먼저 받으면 주담대 상환액을 빼지 않고 한도를 계산해요.
+    const byIncome=income*C.mult;
+    function solve(creditFirst){
+      let m=mortgage(0), credit=null;
+      for(let i=0;i<4;i++){
+        const byDsr=Math.max(0,(income*C.dsr-(creditFirst?0:m.first*12)-coDsr-b.debt)/perWon);
+        const cMax=Math.max(0,Math.min(byIncome,byDsr));
+        const need=P?P+f-m.loan-coAmt:null, left=need==null?null:b.cash-need;
+        const cNeed=left!=null&&left<0?-left:0, use=Math.min(cNeed,cMax);
+        credit={max:cMax,byIncome,byDsr,need:cNeed,use,short:cNeed-use,monthly:use*C.rate/12,first:creditFirst};
+        if(!creditFirst) break;
+        // 먼저 받은 신용대출 이자는 주담대 DTI 심사에 잡혀요
+        const m2=mortgage(use*C.rate); if(m2.loan===m.loan) break; m=m2;
+      }
+      return {m,credit};
+    }
+    const later=solve(false), early=solve(true), pick=C.first?early:later, m=pick.m;
+    const need=P?P+f-m.loan-coAmt:null, left=need==null?null:b.cash-need;
+    return {ok,checks,caps:m.caps,max:m.max,loan:m.loan,rate,first:m.first,last:m.last,interest:m.interest,fee:f,bang,need,left,useKb,
       company:{amount:coAmt,monthly:coMonthly},
-      share:income?(first+coMonthly)*12/income:null,
-      credit:{max:creditMax,byIncome,byDsr,need:creditNeed,use:creditUse,short:creditNeed-creditUse,monthly:creditUse*C.rate/12}};
+      share:income?(m.first+coMonthly)*12/income:null,
+      credit:pick.credit, creditAlt:(C.first?later:early).credit};
   }
   return {income,gRate,gOk,gMax,gMaxPrice,dRate,dStatus,dMax,dMaxPrice,listing,quick,married};
 }
@@ -316,6 +337,10 @@ function creditBox(S,q){
   const box=el('div',{class:'lcredit'},
     el('div',{class:'lbar'},el('h3',{},'신용대출로 채우기'),
       c.need?el('span',{class:'pill '+(c.short>0?'bad':'good')},c.short>0?`${eok(c.short)} 더 모자라요`:'신용대출로 해결돼요'):null),
+    el('div',{class:'lgrid'},field('신용대출 먼저 받기 (주담대 실행 전)','credit.first','yn')),
+    el('p',{class:'lnote'},C.first
+      ?`신용대출을 먼저 받으면 주담대 상환액이 DSR에 안 들어가요. 주담대를 먼저 받으면 신용대출 최대는 ${eok(q.creditAlt.max)}이에요.`
+      :`주담대를 먼저 받으면 그 상환액이 신용대출 DSR에 들어가요. 신용대출을 먼저 받으면 최대 ${eok(q.creditAlt.max)}까지 돼요.`),
     el('dl',{class:'ldl'},
       el('dt',{},'신용대출 최대'),el('dd',{class:'pick'},eok(c.max)),
       el('dt',{},`· 연소득의 ${pct(C.mult)}`),el('dd',{},eok(c.byIncome)),
@@ -328,7 +353,15 @@ function creditBox(S,q){
     el('details',{},el('summary',{class:'lnote'},'신용대출 조건 고치기'),
       el('div',{class:'lgrid'},field('신용대출 금리','credit.rate','pct'),field('연소득 대비 한도','credit.mult','pct'),
         field('DSR 상한','credit.dsr','pct'),field('DSR 계산 만기 (년)','credit.years','num')),
-      el('p',{class:'lnote'},'DSR은 모든 대출의 1년 원리금 ÷ 연소득이에요. 위 주담대 상환액과 기존 대출(회사대출은 "DSR에 포함"일 때)을 먼저 빼요. 신용대출은 만기 5년으로 나눠 갚는다고 보고 계산해요. 실제 한도는 은행·신용점수·스트레스 DSR에 따라 더 적을 수 있어요.')));
+      el('p',{class:'lnote'},'DSR은 모든 대출의 1년 원리금 ÷ 연소득이에요. 기존 대출, 회사대출("DSR에 포함"일 때), 주담대를 먼저 받는 경우엔 그 상환액까지 빼고 남는 만큼 신용대출이 돼요. 신용대출은 만기 5년으로 나눠 갚는다고 보고 계산해요. 먼저 받은 신용대출 이자는 보금자리론·디딤돌 DTI 심사에 잡혀서 주담대 한도가 조금 줄 수 있어요. 실제 한도는 은행·신용점수·스트레스 DSR에 따라 더 적을 수 있어요.')),
+    el('details',{},el('summary',{class:'lnote'},'신용대출 최대로 받는 법'),
+      el('ol',{class:'lnotes'},
+        el('li',{},'순서: 신용대출을 먼저 받고 보금자리론·디딤돌을 신청하세요. 정책대출은 새로 받을 때 DSR을 안 봐요. 반대로 하면 주담대 상환액이 DSR에 들어가서 신용대출이 크게 줄어요.'),
+        el('li',{},'연소득 한도는 모든 은행 합계예요. 여러 곳에 나눠도 총액은 보통 연소득 이내라, 금리·조건이 좋은 한두 곳에서 받는 게 나아요.'),
+        el('li',{},'주거래·급여 은행부터: 급여이체 은행이 한도·금리를 가장 잘 줘요. 직장인 우대 상품(공무원·대기업 전용 등)이 있으면 먼저 보세요.'),
+        el('li',{},'소득 증빙을 최대로: 최근 연봉 인상분, 성과급이 반영된 원천징수영수증이나 소득금액증명을 내세요. 부부라면 각자 명의로 따로 받을 수 있어요.'),
+        el('li',{},'1억 넘게 받으면 조심: 신용대출 합계가 1억을 넘으면 1년 안에 규제지역 집을 살 때 회수될 수 있고, 스트레스 DSR도 붙어요. 1억 이하로 맞추는 게 안전해요.'),
+        el('li',{},'시점: 신용대출은 보금자리론 신청 전에 실행까지 끝내야 해요. 보금자리론 심사(DTI)엔 신용대출 이자가 들어가니 숨기지 말고 그대로 신고하세요. 집 거래 신고 때 자금조달계획서를 내는 경우엔 신용대출도 적어야 해요.'))));
   return box;
 }
 function tile(name,status,ok,pairs){
