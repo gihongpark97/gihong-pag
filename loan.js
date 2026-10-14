@@ -14,6 +14,8 @@ const DEFAULTS={
   quick:{price:0, kb:0, borrow:0, method:'원리금균등', region:REGIONS[1], area:0},
   // 신용대출: 모자란 돈을 채울 때. 한도 = min(연소득×배수, DSR 여유). DSR은 신용대출을 만기 5년으로 나눠 계산해요.
   credit:{rate:0.05, mult:1, dsr:0.4, years:5},
+  // 회사대출(사내 주택자금 등): 필요한 현금을 먼저 채우고, 월 납입액에 더해요. dsr이 참이면 신용대출 DSR 계산에도 넣어요.
+  company:{amount:0, rate:0.02, years:5, dsr:true},
   // 시세 조회: 공공데이터 인증키, 마지막 검색어, 직접 적어 둔 KB시세(단지별)
   price:{key:'', sgg:'', name:'', kb:{}},
   cost:{tax:0.011, relief:2000000, broker:0.0044, fixed:3000000},
@@ -115,14 +117,16 @@ function calc(S){
     let first,last,interest;
     if(Q.method==='원금균등'){ const pr=loan/n; first=pr+loan*r; last=pr+pr*r; interest=loan*r*(n+1)/2; }
     else { first=last=pmt(r,n,loan); interest=first*n-loan; }
-    const need=P?P+f-loan:null, left=need==null?null:b.cash-need;
+    const Co=S.company, coAmt=+Co.amount||0, coMonthly=coAmt?pmt(Co.rate/12,Math.max(1,Co.years)*12,coAmt):0;
+    const need=P?P+f-loan-coAmt:null, left=need==null?null:b.cash-need;
     // 신용대출: DSR = (모든 대출 연 원리금) ÷ 연소득. 주담대 첫해 원리금과 기존 대출을 빼고 남는 만큼.
     const C=S.credit, perWon=1/C.years+C.rate;
-    const byIncome=income*C.mult, byDsr=Math.max(0,(income*C.dsr-first*12-b.debt)/perWon);
+    const byIncome=income*C.mult, byDsr=Math.max(0,(income*C.dsr-first*12-(Co.dsr?coMonthly*12:0)-b.debt)/perWon);
     const creditMax=Math.max(0,Math.min(byIncome,byDsr));
     const creditNeed=left!=null&&left<0?-left:0, creditUse=Math.min(creditNeed,creditMax);
     return {ok,checks,caps,max,loan,rate,first,last,interest,fee:f,bang,need,left,useKb,
-      share:income?first*12/income:null,
+      company:{amount:coAmt,monthly:coMonthly},
+      share:income?(first+coMonthly)*12/income:null,
       credit:{max:creditMax,byIncome,byDsr,need:creditNeed,use:creditUse,short:creditNeed-creditUse,monthly:creditUse*C.rate/12}};
   }
   return {income,gRate,gOk,gMax,gMaxPrice,dRate,dStatus,dMax,dMaxPrice,listing,quick,married};
@@ -273,6 +277,8 @@ function quickView(kind,S,R){
       isB?null:field('지역 (방공제)','quick.region','sel',REGIONS),
       isB?null:field('전용면적 (㎡, 모르면 비움)','quick.area','num'),
       field('빌릴 금액 (비우면 최대)','quick.borrow','won'),
+      field('회사대출 금액','company.amount','won'),
+      +S.company.amount?[field('회사대출 금리','company.rate','pct'),field('회사대출 기간 (년)','company.years','num'),field('회사대출 DSR에 포함','company.dsr','yn')]:null,
       field('기존 대출 연간 원리금','base.debt','won')),
     el('p',{class:'lnote'},married?'신혼: 혼인 7년 이내, 부부 합산 소득으로 심사해요.':'미혼: 기홍 단독 명의 기준이에요.'));
   const big=(label,value,sub,cls)=>el('div',{class:'lbig'+(cls?' '+cls:'')},el('span',{class:'llab'},label),el('b',{},value),sub?el('span',{class:'lsub'},sub):null);
@@ -288,6 +294,7 @@ function quickView(kind,S,R){
       el('dt',{},'집값'),el('dd',{},eok(P)),
       el('dt',{},'취득세·중개·등기 등 부대비용'),el('dd',{},eok(q.fee)),
       el('dt',{},'대출'),el('dd',{},'− '+eok(q.loan)),
+      q.company.amount?[el('dt',{},'회사대출'),el('dd',{},'− '+eok(q.company.amount))]:null,
       el('dt',{},el('b',{},'내 돈이 필요한 금액')),el('dd',{},el('b',{},eok(q.need))),
       el('dt',{},'보유 현금과 비교'),el('dd',{class:q.left>=0?'plus':'minus'},S.base.cash?(q.left>=0?`${eok(q.left)} 남아요`:`${eok(-q.left)} 모자라요`):'보유 현금을 넣어 주세요'),
       q.useKb?[el('dt',{},'KB시세와 매매가 차이'),el('dd',{},eok(P-(+Q.kb)))]:null,
@@ -314,12 +321,14 @@ function creditBox(S,q){
       el('dt',{},`· 연소득의 ${pct(C.mult)}`),el('dd',{},eok(c.byIncome)),
       el('dt',{},`· DSR ${pct(C.dsr)} 남는 여유`),el('dd',{},eok(c.byDsr)),
       c.need?[el('dt',{},'필요한 신용대출'),el('dd',{},eok(c.need)),
-        el('dt',{},`월 이자 (${eok(c.use)} · 금리 ${pct(C.rate)})`),el('dd',{},won(c.monthly)),
-        el('dt',{},el('b',{},'매달 나가는 돈 (주담대 + 신용 이자)')),el('dd',{},el('b',{},won(q.first+c.monthly)))]:null),
+        el('dt',{},`월 이자 (${eok(c.use)} · 금리 ${pct(C.rate)})`),el('dd',{},won(c.monthly))]:null,
+      q.company.amount?[el('dt',{},`회사대출 월 상환 (금리 ${pct(S.company.rate)} · ${S.company.years}년)`),el('dd',{},won(q.company.monthly))]:null,
+      (c.need||q.company.amount)?[el('dt',{},el('b',{},'매달 나가는 돈 ('+['주담대',q.company.amount?'회사대출':null,c.need?'신용 이자':null].filter(Boolean).join(' + ')+')')),
+        el('dd',{},el('b',{},won(q.first+q.company.monthly+c.monthly)))]:null),
     el('details',{},el('summary',{class:'lnote'},'신용대출 조건 고치기'),
       el('div',{class:'lgrid'},field('신용대출 금리','credit.rate','pct'),field('연소득 대비 한도','credit.mult','pct'),
         field('DSR 상한','credit.dsr','pct'),field('DSR 계산 만기 (년)','credit.years','num')),
-      el('p',{class:'lnote'},'DSR은 모든 대출의 1년 원리금 ÷ 연소득이에요. 위 주담대 상환액과 기존 대출을 먼저 빼요. 신용대출은 만기 5년으로 나눠 갚는다고 보고 계산해요. 실제 한도는 은행·신용점수·스트레스 DSR에 따라 더 적을 수 있어요.')));
+      el('p',{class:'lnote'},'DSR은 모든 대출의 1년 원리금 ÷ 연소득이에요. 위 주담대 상환액과 기존 대출(회사대출은 "DSR에 포함"일 때)을 먼저 빼요. 신용대출은 만기 5년으로 나눠 갚는다고 보고 계산해요. 실제 한도는 은행·신용점수·스트레스 DSR에 따라 더 적을 수 있어요.')));
   return box;
 }
 function tile(name,status,ok,pairs){
