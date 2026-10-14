@@ -120,6 +120,41 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .sko{font-size:.88rem;color:var(--muted);line-height:1.45}
 .slinks{display:grid;gap:4px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:.85rem;color:var(--muted)}
 .slinks a{color:var(--accent)}
+/* 임장 체크리스트: 한 줄 진행바 + 섹션별 접이식 체크 카드, 현장에서 엄지로 탭하는 모바일 우선 */
+.im{max-width:720px}
+.im-house{gap:8px}.im-house label{font-size:.78rem;color:var(--muted);letter-spacing:.04em}
+.im-house input,.im-house textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
+.im-house textarea{min-height:64px;resize:vertical}
+.im-house textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+.im-bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:8px;display:flex;align-items:center;gap:12px}
+.im-track{flex:1;height:8px;background:var(--line);border-radius:99px;overflow:hidden}
+.im-fill{height:100%;background:var(--accent);width:0;transition:width .25s}
+.im-count{font-variant-numeric:tabular-nums;font-weight:700;font-size:.9rem;min-width:64px;text-align:right}
+.im-legend{display:flex;gap:8px 14px;flex-wrap:wrap;justify-content:space-between;font-size:.82rem;color:var(--muted);margin:4px 0 12px}
+.im-legend span{display:inline-flex;align-items:center;gap:6px}.im-legend a{color:var(--accent)}
+.im-dot{width:10px;height:10px;border-radius:3px;background:var(--danger)}
+.im-list{display:grid;gap:12px}
+.im-sec{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.im-sec summary{list-style:none;cursor:pointer;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px;font-weight:600;font-size:1.02rem}
+.im-sec summary::-webkit-details-marker{display:none}
+.im-sec summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.im-meta{font-weight:500;font-size:.82rem;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.im-meta.done{color:var(--accent)}
+.im-items{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.im-item{display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);cursor:pointer;align-items:flex-start}
+.im-item:last-child{border-bottom:0}
+.im-item input{appearance:none;-webkit-appearance:none;flex:none;width:22px;height:22px;margin:1px 0 0;border:2px solid var(--line);border-radius:6px;background:var(--surface);display:grid;place-content:center;cursor:pointer}
+.im-item input:checked{background:var(--accent);border-color:var(--accent)}
+.im-item input:checked::after{content:"";width:6px;height:11px;border:solid var(--surface);border-width:0 2.5px 2.5px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.im-item input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.im-txt{min-width:0}.im-txt b{font-weight:600;display:block}.im-txt small{color:var(--muted);font-size:.86rem;display:block;margin-top:2px}
+.im-item.key .im-txt b::before{content:"";display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--danger);margin-right:7px;vertical-align:2px}
+.im-item.checked .im-txt b{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--line)}
+.im-actions{margin-top:16px}
+.im-confirm{background:var(--danger-soft);border-radius:10px;padding:12px 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.im-yes{background:var(--danger)}
+.im-note{font-size:.85rem;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.im-fill{transition:none}}
 /* 입지 체크리스트: 지하철 노선색 칩 + 오른쪽으로 늘어나는 매물 열 */
 :root{--rc-l1:#0052a4;--rc-l2:#00a84d;--rc-l3:#ef7c1c;--rc-l4:#00a5de;--rc-l5:#996cac;--rc-l6:#cd7c2f}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--rc-l1:#4d8fe0;--rc-l2:#2bc46f;--rc-l3:#f59a4a;--rc-l4:#38bdf0;--rc-l5:#b98fcb;--rc-l6:#de9a5a}}
@@ -353,6 +388,7 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 <script src="loan.js"></script>
 <script src="wedding.js"></script>
 <script src="realty.js"></script>
+<script src="imjang.js"></script>
 <script src="stocks.js"></script>
 <script src="admin.js"></script>
 <script>
@@ -371,6 +407,7 @@ const MENU=[
     ]},
   ]},
   {label:'부동산', children:[
+    {key:'imjang', label:'임장 체크리스트', view:'imjang'},
     {key:'realty-check', label:'입지 체크리스트', view:'realtyCheck'},
     {key:'loan', label:'대출계산기', view:'loan'},
   ]},
