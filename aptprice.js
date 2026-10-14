@@ -133,7 +133,7 @@ function complexCard(g){
   kbIn.onchange=()=>{ const n=+kbIn.value.replace(/[^0-9]/g,'')||0;
     if(n) P.kb[kbKey(g)]={price:n,date:new Date().toISOString().slice(0,10)}; else delete P.kb[kbKey(g)];
     ctx.save(); setTimeout(draw,0); };
-  const use=(label,p)=>el('button',{class:'chip',type:'button',onclick:()=>ctx.usePrice(p,`${g.apt} ${label}`)},`${label}로 대출 계산`);
+  const use=(label,p,isKb)=>el('button',{class:'chip',type:'button',onclick:()=>ctx.usePrice(p,`${g.apt} ${label}`,isKb)},`${label}로 대출 계산`);
   return el('article',{class:'lc'},
     el('div',{class:'lch'},el('div',{class:'lname'},el('b',{},g.apt),el('span',{},[lastQuery.sgg.n,g.dong,g.built?`${g.built}년 준공`:null].filter(Boolean).join(' · ')))),
     el('div',{class:'lbigs'},
@@ -141,7 +141,7 @@ function complexCard(g){
         el('span',{class:'lsub'},`${dateOf(latest)} · 전용 ${latest.area}㎡ · ${latest.floor}층${latest.kind?' · '+latest.kind:''}`)),
       el('div',{class:'lbig'},el('span',{class:'llab'},'KB시세 (일반가)'),el('b',{},kb.price?eok(kb.price):'직접 확인'),
         el('span',{class:'lsub'},kb.price?`${kb.date} 적어 둠`:'KB부동산에서 보고 아래에 적어 두세요'))),
-    el('div',{class:'lbtns'},use('실거래가',latest.price),kb.price?use('KB시세',kb.price):null),
+    el('div',{class:'lbtns'},use('실거래가',latest.price),kb.price?use('KB시세',kb.price,true):null),
     el('div',{},el('h3',{},'면적별 최근 거래'),el('div',{class:'ltablewrap'},el('table',{class:'ltable'},
       el('thead',{},el('tr',{},el('th',{},'전용'),el('th',{},'거래가'),el('th',{},'계약일'),el('th',{},'층'))),
       el('tbody',{},...areas.map(([a,x])=>el('tr',{},el('td',{},`${x.area}㎡`),el('td',{},eok(x.price)),el('td',{},dateOf(x)),el('td',{},x.floor))))))),

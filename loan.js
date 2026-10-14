@@ -10,7 +10,10 @@ const TERMS=[10,15,20,30];
 const DEFAULTS={
   base:{married:'미혼', first:true, age30:true, incG:0, incJ:0, cash:0, debt:0, term:30},
   // 빠른 계산: 집값만 넣으면 상품별 대출·월 상환액을 보여줘요. borrow가 0이면 최대한도로 빌려요.
-  quick:{price:0, borrow:0, method:'원리금균등', region:REGIONS[1], area:0},
+  // kb: KB시세(0이면 매매가로 LTV 계산)
+  quick:{price:0, kb:0, borrow:0, method:'원리금균등', region:REGIONS[1], area:0},
+  // 신용대출: 모자란 돈을 채울 때. 한도 = min(연소득×배수, DSR 여유). DSR은 신용대출을 만기 5년으로 나눠 계산해요.
+  credit:{rate:0.05, mult:1, dsr:0.4, years:5},
   // 시세 조회: 공공데이터 인증키, 마지막 검색어, 직접 적어 둔 KB시세(단지별)
   price:{key:'', sgg:'', name:'', kb:{}},
   cost:{tax:0.011, relief:2000000, broker:0.0044, fixed:3000000},
@@ -102,18 +105,25 @@ function calc(S){
     }
     const ok=checks.every(c=>c[1]);
     const bang=!isB&&d.bang?bangOf(Q.region):0;
-    const ltvCap=P?Math.max(0,P*(isB?g.ltv:d.ltv)-bang):null;
+    const K=+Q.kb||0, base=K?(P?Math.min(P,K):K):P, useKb=K>0&&(!P||K<P);
+    const ltvCap=base?Math.max(0,base*(isB?g.ltv:d.ltv)-bang):null;
     const limit=isB?gLimit:dLimit, dtiCap=isB?gDti:dDti;
-    const caps=[['상품 한도',limit],['소득 기준(DTI)',dtiCap]]; if(ltvCap!=null) caps.unshift([isB?`집값의 ${pct(g.ltv)}`:`집값의 ${pct(d.ltv)}${bang?' − 방공제':''}`,ltvCap]);
+    const caps=[['상품 한도',limit],['소득 기준(DTI)',dtiCap]]; if(ltvCap!=null) caps.unshift([`${useKb?'KB시세':'집값'}의 ${pct(isB?g.ltv:d.ltv)}${!isB&&bang?' − 방공제':''}`,ltvCap]);
     const max=ok?Math.max(0,Math.min(...caps.map(c=>c[1]))):0;
     const loan=+Q.borrow>0?Math.min(+Q.borrow,max):max;
     const r=rate/12;
     let first,last,interest;
     if(Q.method==='원금균등'){ const pr=loan/n; first=pr+loan*r; last=pr+pr*r; interest=loan*r*(n+1)/2; }
     else { first=last=pmt(r,n,loan); interest=first*n-loan; }
-    const need=P?P+f-loan:null;
-    return {ok,checks,caps,max,loan,rate,first,last,interest,fee:f,bang,need,left:need==null?null:b.cash-need,
-      share:income?first*12/income:null};
+    const need=P?P+f-loan:null, left=need==null?null:b.cash-need;
+    // 신용대출: DSR = (모든 대출 연 원리금) ÷ 연소득. 주담대 첫해 원리금과 기존 대출을 빼고 남는 만큼.
+    const C=S.credit, perWon=1/C.years+C.rate;
+    const byIncome=income*C.mult, byDsr=Math.max(0,(income*C.dsr-first*12-b.debt)/perWon);
+    const creditMax=Math.max(0,Math.min(byIncome,byDsr));
+    const creditNeed=left!=null&&left<0?-left:0, creditUse=Math.min(creditNeed,creditMax);
+    return {ok,checks,caps,max,loan,rate,first,last,interest,fee:f,bang,need,left,useKb,
+      share:income?first*12/income:null,
+      credit:{max:creditMax,byIncome,byDsr,need:creditNeed,use:creditUse,short:creditNeed-creditUse,monthly:creditUse*C.rate/12}};
   }
   return {income,gRate,gOk,gMax,gMaxPrice,dRate,dStatus,dMax,dMaxPrice,listing,quick,married};
 }
@@ -190,7 +200,7 @@ function render(){
       el('div',{},el('div',{class:'crumb'},'대출계산기'),el('h1',{},'시세 조회'),el('div',{class:'sum'},'아파트 이름으로 최근 실거래가와 KB시세 보기')),
       el('div',{class:'acct'},el('div',{class:'sync',id:'loansync'}))),tabs,
       window.AptPrice?window.AptPrice.view({get:()=>state.settings.price,save,
-        usePrice:(p,what)=>{ state.settings.quick.price=p; tab='bog'; try{ localStorage.setItem('hong.loan.tab',tab); }catch(e){} save(); render(); flash(`${what} ${eok(p)}을 집값에 넣었어요.`); }})
+        usePrice:(p,what,isKb)=>{ state.settings.quick[isKb?'kb':'price']=p; tab='bog'; try{ localStorage.setItem('hong.loan.tab',tab); }catch(e){} save(); render(); flash(`${what} ${eok(p)}을 ${isKb?'KB시세':'집값'}에 넣었어요.`); }})
       :el('p',{class:'lnote'},'시세 조회를 불러오지 못했어요. 새로고침해 주세요.'));
     setStatus(ref?'모든 기기에 저장됨':(window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.apiKey?'불러오는 중…':'이 기기에만 저장됨'));
     return;
@@ -251,6 +261,7 @@ function quickView(kind,S,R){
   const inputs=el('section',{class:'lcard'},el('h2',{},'입력'),
     el('div',{class:'lgrid'},
       field('집값 (매매가)','quick.price','won'),
+      field('KB시세 (모르면 비움)','quick.kb','won'),
       field('혼인 상태','base.married','sel',['미혼','신혼']),
       field(married?'기홍 연소득':'연소득 (세전)','base.incG','won'),
       married?field('지연 연소득','base.incJ','won'):null,
@@ -279,9 +290,11 @@ function quickView(kind,S,R){
       el('dt',{},'대출'),el('dd',{},'− '+eok(q.loan)),
       el('dt',{},el('b',{},'내 돈이 필요한 금액')),el('dd',{},el('b',{},eok(q.need))),
       el('dt',{},'보유 현금과 비교'),el('dd',{class:q.left>=0?'plus':'minus'},S.base.cash?(q.left>=0?`${eok(q.left)} 남아요`:`${eok(-q.left)} 모자라요`):'보유 현금을 넣어 주세요'),
+      q.useKb?[el('dt',{},'KB시세와 매매가 차이'),el('dd',{},eok(P-(+Q.kb)))]:null,
       q.share!=null&&q.loan?[el('dt',{},'연소득 대비 상환 부담'),el('dd',{class:q.share>0.4?'minus':''},pct(q.share))]:null)
      :el('p',{class:'lnote'},'집값을 넣으면 필요한 현금과 대출 한도가 집값 기준으로 계산돼요.'),
     el('div',{},el('h3',{},'자격 확인'),el('ul',{class:'lchecks'},...q.checks.map(([t,ok])=>el('li',{class:ok?'ok':'no'},(ok?'✓ ':'✕ ')+t)))),
+    creditBox(S,q),
     q.ok?el('div',{},el('h3',{},'대출 한도는 이 중 가장 작은 값이에요'),el('dl',{class:'ldl'},...q.caps.flatMap(([k,v])=>[el('dt',{},k),el('dd',{class:v===q.max?'pick':''},eok(v))]))):null);
   const other=R.quick(isB?'did':'bog',Q);
   const cmp=el('p',{class:'lnote lcmp'},
@@ -290,6 +303,24 @@ function quickView(kind,S,R){
     ' · ',el('button',{class:'linkbtn',type:'button',onclick:()=>{ tab=isB?'did':'bog'; try{ localStorage.setItem('hong.loan.tab',tab); }catch(e){} render(); }},`${isB?'디딤돌':'보금자리론'} 보기`));
   return el('div',{class:'lquick'},inputs,el('div',{},result,cmp,
     el('p',{class:'lnote'},'금리·한도는 2026년 9월 30일 기준이에요. 상품 조건은 "매물 비교" 탭에서 고칠 수 있어요. 신청 전에 꼭 기금e든든·주택금융공사에서 다시 확인하세요.')));
+}
+function creditBox(S,q){
+  const c=q.credit, C=S.credit;
+  const box=el('div',{class:'lcredit'},
+    el('div',{class:'lbar'},el('h3',{},'신용대출로 채우기'),
+      c.need?el('span',{class:'pill '+(c.short>0?'bad':'good')},c.short>0?`${eok(c.short)} 더 모자라요`:'신용대출로 해결돼요'):null),
+    el('dl',{class:'ldl'},
+      el('dt',{},'신용대출 최대'),el('dd',{class:'pick'},eok(c.max)),
+      el('dt',{},`· 연소득의 ${pct(C.mult)}`),el('dd',{},eok(c.byIncome)),
+      el('dt',{},`· DSR ${pct(C.dsr)} 남는 여유`),el('dd',{},eok(c.byDsr)),
+      c.need?[el('dt',{},'필요한 신용대출'),el('dd',{},eok(c.need)),
+        el('dt',{},`월 이자 (${eok(c.use)} · 금리 ${pct(C.rate)})`),el('dd',{},won(c.monthly)),
+        el('dt',{},el('b',{},'매달 나가는 돈 (주담대 + 신용 이자)')),el('dd',{},el('b',{},won(q.first+c.monthly)))]:null),
+    el('details',{},el('summary',{class:'lnote'},'신용대출 조건 고치기'),
+      el('div',{class:'lgrid'},field('신용대출 금리','credit.rate','pct'),field('연소득 대비 한도','credit.mult','pct'),
+        field('DSR 상한','credit.dsr','pct'),field('DSR 계산 만기 (년)','credit.years','num')),
+      el('p',{class:'lnote'},'DSR은 모든 대출의 1년 원리금 ÷ 연소득이에요. 위 주담대 상환액과 기존 대출을 먼저 빼요. 신용대출은 만기 5년으로 나눠 갚는다고 보고 계산해요. 실제 한도는 은행·신용점수·스트레스 DSR에 따라 더 적을 수 있어요.')));
+  return box;
 }
 function tile(name,status,ok,pairs){
   return el('div',{class:'ltile'},el('div',{class:'ltt'},el('b',{},name),el('span',{class:'pill '+(ok?'good':'bad')},status)),
