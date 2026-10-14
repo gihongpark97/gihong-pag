@@ -11,6 +11,8 @@ const DEFAULTS={
   base:{married:'미혼', first:true, age30:true, incG:0, incJ:0, cash:0, debt:0, term:30},
   // 빠른 계산: 집값만 넣으면 상품별 대출·월 상환액을 보여줘요. borrow가 0이면 최대한도로 빌려요.
   quick:{price:0, borrow:0, method:'원리금균등', region:REGIONS[1], area:0},
+  // 시세 조회: 공공데이터 인증키, 마지막 검색어, 직접 적어 둔 KB시세(단지별)
+  price:{key:'', sgg:'', name:'', kb:{}},
   cost:{tax:0.011, relief:2000000, broker:0.0044, fixed:3000000},
   bang:[55000000,48000000,28000000,25000000],
   bog:{capSingle:70000000, capMarried:85000000, priceCap:600000000, limitGen:360000000, limitFirst:420000000,
@@ -28,7 +30,7 @@ function merge(d,s){ if(s==null||typeof s!=='object'||Array.isArray(d)) return s
 
 let state={settings:clone(DEFAULTS), listings:[]};
 let root=null, ref=null, unsub=null, saveT=null, saving=false, pending=false, editingId=null, showSettings=false;
-const TABS={bog:'보금자리론',did:'디딤돌',cmp:'매물 비교'};
+const TABS={bog:'보금자리론',did:'디딤돌',cmp:'매물 비교',price:'시세 조회'};
 let tab=(()=>{ try{ const t=localStorage.getItem('hong.loan.tab'); return TABS[t]?t:'bog'; }catch(e){ return 'bog'; } })();
 
 /* ---------- 계산 ---------- */
@@ -183,6 +185,16 @@ function render(){
   if(!root) return;
   const S=state.settings, R=calc(S), married=S.base.married==='신혼';
   const tabs=el('div',{class:'ltabs',role:'tablist'},...Object.entries(TABS).map(([k,v])=>el('button',{type:'button',role:'tab','aria-selected':String(tab===k),class:'ltab',onclick:()=>{ tab=k; try{ localStorage.setItem('hong.loan.tab',k); }catch(e){} render(); }},v)));
+  if(tab==='price'){
+    root.replaceChildren(el('div',{class:'lhead'},
+      el('div',{},el('div',{class:'crumb'},'대출계산기'),el('h1',{},'시세 조회'),el('div',{class:'sum'},'아파트 이름으로 최근 실거래가와 KB시세 보기')),
+      el('div',{class:'acct'},el('div',{class:'sync',id:'loansync'}))),tabs,
+      window.AptPrice?window.AptPrice.view({get:()=>state.settings.price,save,
+        usePrice:(p,what)=>{ state.settings.quick.price=p; tab='bog'; try{ localStorage.setItem('hong.loan.tab',tab); }catch(e){} save(); render(); flash(`${what} ${eok(p)}을 집값에 넣었어요.`); }})
+      :el('p',{class:'lnote'},'시세 조회를 불러오지 못했어요. 새로고침해 주세요.'));
+    setStatus(ref?'모든 기기에 저장됨':(window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.apiKey?'불러오는 중…':'이 기기에만 저장됨'));
+    return;
+  }
   if(tab!=='cmp'){
     root.replaceChildren(el('div',{class:'lhead'},
       el('div',{},el('div',{class:'crumb'},'대출계산기'),el('h1',{},TABS[tab]),el('div',{class:'sum'},tab==='bog'?'주택금융공사 정책 대출 · 고정금리':'주택도시기금 정책 대출 · 소득별 금리')),
@@ -312,7 +324,7 @@ function settingsPanel(S,married){
       field('취득세율','cost.tax','pct'), field('생애최초 취득세 감면액','cost.relief','won'),
       field('중개보수율','cost.broker','pct'), field('등기·이사 등 고정비','cost.fixed','won'),
       ...REGIONS.map((r,i)=>field(`방공제: ${r}`,`bang.${i}`,'won')))),
-    el('button',{class:'chip',type:'button',onclick:()=>{ const b=state.settings.base; state.settings=clone(DEFAULTS); state.settings.base=b; save(); render(); }},'상품 조건 기본값으로 되돌리기'));
+    el('button',{class:'chip',type:'button',onclick:()=>{ const {base,price}=state.settings; state.settings=clone(DEFAULTS); Object.assign(state.settings,{base,price}); save(); render(); }},'상품 조건 기본값으로 되돌리기'));
 }
 function card(L,r){
   const best=r.best, cls=best==='디딤돌'?'did':best==='보금자리론'?'bog':'none';
