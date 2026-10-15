@@ -158,7 +158,7 @@ function calc(S){
       dti:income?(m.first*12+b.debt+coInt+pick.credit.use*C.rate)/income:null, dtiLimit:dtiRate,
       dsr:income?(m.first*12+b.debt+coMonthly*12+pick.credit.use*perWon)/income:null};
   }
-  return {income,gRate,gOk,gMax,gMaxPrice,dRate,dStatus,dMax,dMaxPrice,listing,quick,married};
+  return {income,gRate,gOk,gMax,gMaxPrice,dRate,dStatus,dMax,dMaxPrice,listing,quick,married,fee};
 }
 
 /* ---------- 표시 도우미 ---------- */
@@ -300,13 +300,15 @@ function renderNow(){
   const add=el('button',{class:'btn',type:'button',onclick:()=>{ const L={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),name:'',addr:'',price:0,region:REGIONS[1],area:'',url:'',minutes:'',households:'',transit:'',memo:''}; state.listings.push(L); editingId=L.id; render(); }},'매물 추가');
   const importBtn=el('button',{class:'chip',type:'button',onclick:importXlsx},'엑셀에서 불러오기');
 
-  const rows=state.listings.map(L=>({L,r:calc(S).listing(L)}));
+  const rows=state.listings.filter(L=>L.kind!=='sheet').map(L=>({L,r:calc(S).listing(L)}));
+  const sheetRows=state.listings.filter(L=>L.kind==='sheet');
   const groups=BANDS.map(bn=>({bn,items:rows.filter(x=>x.L.id===editingId?false:(x.r&&band(+x.L.price)===bn)).sort((a,b)=>(+a.L.minutes||999)-(+b.L.minutes||999))})).filter(g=>g.items.length);
   const editing=state.listings.find(L=>L.id===editingId);
   const list=el('section',{class:'llist'},
-    el('div',{class:'lbar'},el('h2',{},'매물 비교'),el('div',{class:'lbtns'},importBtn,add)),
+    el('div',{class:'lbar'},el('h2',{},'매물 비교'),el('div',{class:'lbtns'},importBtn,el('button',{class:'chip',type:'button',onclick:downloadTemplate},'엑셀 양식 받기'),add)),
+    sheetRows.length?sheetTable(sheetRows):null,
     editing?editForm(editing):null,
-    groups.length||editing?null:el('div',{class:'empty'},el('b',{},'아직 비교할 매물이 없어요'),el('span',{},'매물 추가를 눌러 가격과 지역을 넣거나, 엑셀 파일을 불러오면 대출액과 월 상환액이 바로 계산돼요.')),
+    groups.length||editing||sheetRows.length?null:el('div',{class:'empty'},el('b',{},'아직 비교할 매물이 없어요'),el('span',{},'매물 추가를 눌러 가격과 지역을 넣거나, 엑셀 파일을 불러오면 대출액과 월 상환액이 바로 계산돼요.')),
     ...groups.map(g=>el('div',{class:'lgroup'},el('h3',{},`${g.bn} 아파트`,el('span',{class:'n'},` ${g.items.length}곳 · 강남역 가까운 순`)),...g.items.map(x=>card(x.L,x.r)))),
     el('ul',{class:'lnotes'},
       el('li',{},'"유리한 대출"은 두 대출 모두 현금이 충분하면 월 상환액이 적은 쪽, 한쪽만 되면 그쪽이에요. 둘 다 모자라면 "현금 부족"이에요.'),
@@ -488,6 +490,85 @@ function editForm(L){
   return form;
 }
 
+/* ---------- 매물 비교 시트(마을·단지별 표) ---------- */
+// 홍이가 쓰는 엑셀 "대출비교" 시트 컬럼 그대로예요. 헤더 이름으로 찾아서 순서가 달라도 돼요.
+const SHEET_COLS=[
+  ['vno','마을번호'],['village','마을'],['name','단지이름'],['pyeong','평형'],['floor','층'],['unit','동호수'],
+  ['households','세대수'],['parking','세대당주차'],['kb','KB일반시세','won'],['kbLow','KB하위시세','won'],['price','매수가','won'],
+  ['total','총지급액','won'],['bogLoan','보금자리대출','won'],['loanCash','대출+현금','won'],['left','남은금액','won'],
+  ['ok','가능여부'],['moveIn','입주가능일'],['url','네이버링크','url'],['agent','부동산'],['memo','비고'],['visit','임장'],['feature','단지별특징']];
+const wonFmt=v=>v===''||v==null||isNaN(v)?'':(v<0?`(₩${Math.round(-v).toLocaleString('ko-KR')})`:`₩${Math.round(v).toLocaleString('ko-KR')}`);
+function sheetTable(rows){
+  // 엑셀에 없으면 계산해서 채워요: 총지급액 = 매수가 + 부대비용, 남은금액 = 대출+현금 − 총지급액
+  const fee=calc(state.settings).fee;
+  const val=(L,k)=>{
+    if(k==='total'&&L.total===''&&+L.price) return +L.price+fee(+L.price);
+    if(k==='left'&&L.left===''&&L.loanCash!=='') return +L.loanCash-val(L,'total');
+    return L[k]; };
+  const cols=SHEET_COLS.filter(([k])=>rows.some(L=>L[k]!==''&&L[k]!=null)||k==='left'||k==='total');
+  const villages=[]; rows.forEach(L=>{ const key=(L.vno??'')+'|'+(L.village??''); let v=villages[villages.length-1];
+    if(!v||v.key!==key){ v={key,rows:[]}; villages.push(v); } v.rows.push(L); });
+  const head=el('tr',{},...cols.map(([,h])=>el('th',{},h)));
+  const body=[]; villages.forEach((v,vi)=>{
+    const cplx=[]; v.rows.forEach(L=>{ let c=cplx[cplx.length-1]; if(!c||c.name!==L.name){ c={name:L.name,n:0}; cplx.push(c);} c.n++; L._c=c; });
+    v.rows.forEach((L,i)=>{
+      const first=i===0, cFirst=i===0||v.rows[i-1]._c!==L._c;
+      const tds=cols.map(([k,,kind])=>{
+        if(k==='vno'||k==='village'){ return first?el('td',{rowspan:v.rows.length,class:'lsg'},String(L[k]??'')):null; }
+        if(k==='name'){ return cFirst?el('td',{rowspan:L._c.n,class:'lsg'},String(L[k]??'')):null; }
+        const x=val(L,k);
+        if(kind==='won') return el('td',{class:'lnum'+(x<0?' neg':'')},wonFmt(x===''?'':+x));
+        if(kind==='url') return el('td',{},x?el('a',{href:/^https?:/.test(x)?x:'https://'+x,target:'_blank',rel:'noopener'},'링크'):'');
+        if(k==='ok') return el('td',{class:'lok '+(/^o$/i.test(x)?'yes':/^x$/i.test(x)?'no':'')},String(x??''));
+        return el('td',{class:k==='memo'||k==='feature'?'lwrap':''},String(x??''));
+      }).filter(Boolean);
+      body.push(el('tr',{class:(vi%2?'lb':'la')+(first?' lvstart':'')},...tds));
+    }); });
+  return el('div',{class:'lsheet'},
+    el('div',{class:'lbar'},el('h3',{},`대출비교 시트 · ${villages.length}개 마을 ${rows.length}건`),
+      el('button',{class:'chip del',type:'button',onclick:()=>{ if(!confirm('불러온 시트 매물을 모두 지울까요?')) return; state.listings=state.listings.filter(L=>L.kind!=='sheet'); save(); render(); }},'시트 매물 지우기')),
+    el('div',{class:'ltablewrap'},el('table',{class:'ltable lsheett'},el('thead',{},head),el('tbody',{},...body))),
+    el('p',{class:'lnote'},'남은금액이 마이너스면 빨간 괄호로 보여요. 같은 엑셀을 다시 불러오면 시트 매물이 새 내용으로 바뀌어요. 엑셀에 총지급액이나 남은금액이 비어 있으면 계산해서 채워요.'));
+}
+async function downloadTemplate(){
+  try{ await loadSheetJS(); }catch(e){ flash('엑셀 도구를 불러오지 못했어요.'); return; }
+  const ws=XLSX.utils.aoa_to_sheet([SHEET_COLS.map(c=>c[1]),[1,'한라마을','주공2단지','20평','고층','109동',2171,0.21,405000000,355000000,450000000,483500000,283500000,200000000,'','O','즉시입주','https://naver.me/...','','','','']]);
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'대출비교'); XLSX.writeFile(wb,'대출비교_양식.xlsx');
+}
+// 헤더 행(단지이름·매수가가 있는 행)을 찾아 시트 매물로 읽어요. 병합된 칸(마을·단지)은 위 값으로 채워요.
+function readSheetListings(wb){
+  const norm=t=>String(t??'').replace(/[\s▼▾▽⏷▼▾]/g,'');
+  for(const sn of wb.SheetNames){
+    const ws=wb.Sheets[sn]; if(!ws||!ws['!ref']) continue;
+    const rng=XLSX.utils.decode_range(ws['!ref']);
+    (ws['!merges']||[]).forEach(m=>{ const tl=ws[XLSX.utils.encode_cell(m.s)]; if(!tl) return;
+      for(let r=m.s.r;r<=m.e.r;r++) for(let c=m.s.c;c<=m.e.c;c++){ const a=XLSX.utils.encode_cell({r,c}); if(!ws[a]) ws[a]=tl; } });
+    for(let hr=rng.s.r;hr<=Math.min(rng.e.r,rng.s.r+9);hr++){
+      const map={};
+      for(let c=rng.s.c;c<=rng.e.c;c++){ const x=ws[XLSX.utils.encode_cell({r:hr,c})]; const h=norm(x&&x.v); if(!h) continue;
+        const col=SHEET_COLS.find(([,name])=>norm(name)===h)||SHEET_COLS.find(([,name])=>h.startsWith(norm(name))&&!SHEET_COLS.some(([,n2])=>n2!==name&&norm(n2)===h));
+        if(col&&map[col[0]]==null) map[col[0]]=c; }
+      if(map.name==null||map.price==null) continue;
+      const out=[]; let prev={};
+      for(let r=hr+1;r<=rng.e.r;r++){
+        const L={id:'s'+Date.now().toString(36)+r+Math.random().toString(36).slice(2,5),kind:'sheet'};
+        SHEET_COLS.forEach(([k,,kind])=>{ const c=map[k]; const x=c==null?null:ws[XLSX.utils.encode_cell({r,c})];
+          if(!x||x.v===''||x.v==null){ L[k]=''; return; }
+          if(kind==='won') L[k]=typeof x.v==='number'?x.v:(parseFloat(String(x.v).replace(/[^0-9.\-]/g,''))*(/^\(.*\)$/.test(String(x.w||x.v).trim())?-1:1)||'');
+          else if(kind==='url') L[k]=(x.l&&x.l.Target)||String(x.v);
+          else L[k]=x.w!=null?String(x.w).trim():String(x.v); });
+        // 병합 안 하고 빈칸으로 둔 마을·단지도 위 행 값으로 채워요
+        ['vno','village','name'].forEach(k=>{ if(L[k]===''&&prev[k]&&(L.price!==''||L.unit!=='')) L[k]=prev[k]; });
+        if(L.price===''&&!L.name&&!L.unit) continue;
+        if(L.price===''&&L.unit===''&&L.pyeong==='') continue;
+        prev=L; out.push(L);
+      }
+      if(out.length) return out;
+    }
+  }
+  return null;
+}
+
 /* ---------- 엑셀 불러오기 ---------- */
 function loadSheetJS(){ return window.XLSX?Promise.resolve():new Promise((ok,no)=>{ const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; s.onload=ok; s.onerror=()=>no(new Error('엑셀 읽기 도구를 불러오지 못했어요')); document.head.append(s); }); }
 function importXlsx(){
@@ -496,7 +577,10 @@ function importXlsx(){
     const file=inp.files[0]; if(!file) return;
     try{
       await loadSheetJS();
-      const wb=XLSX.read(await file.arrayBuffer());
+      const wb=XLSX.read(await file.arrayBuffer(),{cellStyles:false});
+      const sheet=readSheetListings(wb);
+      if(sheet){ state.listings=state.listings.filter(L=>L.kind!=='sheet').concat(sheet); save(); render();
+        flash(`대출비교 시트에서 매물 ${sheet.length}건을 불러왔어요.`); return; }
       const cell=(sh,a)=>{ const ws=wb.Sheets[sh]; const c=ws&&ws[a]; return c?c.v:undefined; };
       const num=(v,d)=>typeof v==='number'?v:d;
       const S=state.settings, b=S.base;
@@ -539,7 +623,7 @@ function importXlsx(){
       }
       save(); render();
       flash(`엑셀에서 기본 정보와 매물 ${added}곳을 불러왔어요.`);
-    }catch(e){ flash('엑셀을 읽지 못했어요. "부동산_대출_매물비교" 형식의 .xlsx 파일인지 확인해 주세요.'); }
+    }catch(e){ console.error('xlsx',e); flash('엑셀을 읽지 못했어요. "부동산_대출_매물비교" 형식의 .xlsx 파일인지 확인해 주세요.'); }
   };
   inp.click();
 }

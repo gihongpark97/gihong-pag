@@ -263,6 +263,17 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .ltablewrap{overflow-x:auto}
 .ltable{border-collapse:collapse;font-size:.85rem;min-width:420px}
 .ltable th,.ltable td{border-bottom:1px solid var(--line);padding:6px;text-align:left;font-variant-numeric:tabular-nums}
+.lsheet{display:grid;gap:8px;margin-bottom:18px}
+.lsheett{font-size:.8rem;min-width:1400px}
+.lsheett th{position:sticky;top:0;background:var(--surface);white-space:nowrap;font-weight:600;border-bottom:2px solid var(--line)}
+.lsheett td{white-space:nowrap;vertical-align:middle}
+.lsheett td.lwrap{white-space:normal;min-width:220px;max-width:340px}
+.lsheett td.lsg{font-weight:600;text-align:center}
+.lsheett td.lnum{text-align:right}
+.lsheett td.neg{color:var(--danger)}
+.lsheett td.lok{text-align:center;font-weight:600}.lsheett td.lok.no{color:var(--danger)}
+.lsheett tr.la td{background:color-mix(in srgb,#f5d76e 14%,transparent)}
+.lsheett tr.lvstart td{border-top:2px solid var(--line)}
 .ltable input{width:70px;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
 .lnotes{font-size:.8rem;color:var(--muted);padding-left:18px;display:grid;gap:4px}
 @media (max-width:480px){.lcols{grid-template-columns:1fr}}
@@ -394,14 +405,14 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=20261015i"></script>
-<script src="aptprice.js?v=20261015i"></script>
-<script src="loan.js?v=20261015i"></script>
-<script src="wedding.js?v=20261015i"></script>
-<script src="realty.js?v=20261015i"></script>
-<script src="imjang.js?v=20261015i"></script>
-<script src="stocks.js?v=20261015i"></script>
-<script src="admin.js?v=20261015i"></script>
+<script src="firebase-config.js?v=20261015j"></script>
+<script src="aptprice.js?v=20261015j"></script>
+<script src="loan.js?v=20261015j"></script>
+<script src="wedding.js?v=20261015j"></script>
+<script src="realty.js?v=20261015j"></script>
+<script src="imjang.js?v=20261015j"></script>
+<script src="stocks.js?v=20261015j"></script>
+<script src="admin.js?v=20261015j"></script>
 <script>
 const ICON = {
   chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
