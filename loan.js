@@ -322,9 +322,13 @@ function quickView(kind,S,R){
       el('dt',{},'집값'),el('dd',{},eok(P)),
       el('dt',{},'취득세·중개·등기 등 부대비용'),el('dd',{},eok(q.fee)),
       el('dt',{},'대출'),el('dd',{},'− '+eok(q.loan)),
-      q.company.amount?[el('dt',{},'회사대출'),el('dd',{},'− '+eok(q.company.amount))]:null,
-      el('dt',{},el('b',{},'내 돈이 필요한 금액')),el('dd',{},el('b',{},eok(q.need))),
-      el('dt',{},'보유 현금과 비교'),el('dd',{class:q.left>=0?'plus':'minus'},S.base.cash?(q.left>=0?`${eok(q.left)} 남아요`:`${eok(-q.left)} 모자라요`):'보유 현금을 넣어 주세요'),
+      el('dt',{},el('b',{},'내 돈이 필요한 금액')),el('dd',{},el('b',{},eok(P+q.fee-q.loan))),
+      el('dt',{},'· 보유 현금'),el('dd',{},eok(S.base.cash)),
+      q.company.amount?[el('dt',{},'· 회사대출'),el('dd',{},eok(q.company.amount))]:null,
+      q.credit.use?[el('dt',{},'· 빌릴 신용대출'),el('dd',{},eok(q.credit.use))]:null,
+      (()=>{ const have=(+S.base.cash||0)+q.company.amount+q.credit.use, gap=have-(P+q.fee-q.loan);
+        return [el('dt',{},el('b',{},'마련할 돈 합계')),el('dd',{},el('b',{},eok(have))),
+          el('dt',{},'필요한 금액과 비교'),el('dd',{class:gap>=0?'plus':'minus'},have?(Math.abs(gap)<1e4?'딱 맞아요':gap>=0?`${eok(gap)} 남아요`:`${eok(-gap)} 모자라요`):'보유 현금을 넣어 주세요')]; })(),
       q.useKb?[el('dt',{},'KB시세와 매매가 차이'),el('dd',{},eok(P-(+Q.kb)))]:null,
       q.share!=null&&q.loan?[el('dt',{},'연소득 대비 상환 부담'),el('dd',{class:q.share>0.4?'minus':''},pct(q.share))]:null)
      :el('p',{class:'lnote'},'집값을 넣으면 필요한 현금과 대출 한도가 집값 기준으로 계산돼요.'),
