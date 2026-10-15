@@ -132,7 +132,8 @@ function calc(S){
     // 신용대출 DSR = (모든 대출 1년 원리금) ÷ 연소득. 신용대출은 C.years 만기로 나눠 갚는다고 봐요.
     // 보금자리론·디딤돌은 새로 받을 땐 DSR을 안 보지만, 이미 받은 뒤 신용대출을 받으면 DSR에 들어가요.
     // 그래서 신용대출을 먼저 받으면 주담대 상환액을 빼지 않고 한도를 계산해요.
-    const byIncome=income*C.mult;
+    // 회사대출도 신용대출 한도(연소득 기준)에 같이 잡혀서 그만큼 빼요
+    const byIncome=Math.max(0,income*C.mult-coAmt);
     function solve(creditFirst){
       let m=mortgage(coInt), credit=null;
       for(let i=0;i<4;i++){
@@ -387,7 +388,7 @@ function creditBox(S,q){
       :`주담대를 먼저 받으면 그 상환액이 신용대출 DSR에 들어가요. 신용대출을 먼저 받으면 최대 ${eok(q.creditAlt.max)}까지 돼요.`),
     el('dl',{class:'ldl'},
       el('dt',{},'신용대출 최대'),el('dd',{class:'pick'},eok(c.max)),
-      el('dt',{},`· 연소득의 ${pct(C.mult)}`),el('dd',{},eok(c.byIncome)),
+      el('dt',{},`· 연소득의 ${pct(C.mult)}${q.company.amount?` − 회사대출 ${eok(q.company.amount)}`:''}`),el('dd',{},eok(c.byIncome)),
       el('dt',{},`· DSR ${pct(C.dsr)} 남는 여유`),el('dd',{},eok(c.byDsr)),
       c.need?[el('dt',{},'필요한 신용대출'),el('dd',{},eok(c.need))]:null,
       (c.need||c.use)?[el('dt',{},el('b',{},'빌리는 신용대출')),el('dd',{class:c.over?'minus':''},el('b',{},eok(c.use)+(c.over?` (최대까지만, 입력 ${eok(c.want)})`:''))),
