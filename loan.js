@@ -11,7 +11,7 @@ const DEFAULTS={
   base:{married:'미혼', first:true, age30:true, incG:0, incJ:0, cash:0, debt:0, term:30},
   // 빠른 계산: 집값만 넣으면 상품별 대출·월 상환액을 보여줘요. borrow가 0이면 최대한도로 빌려요.
   // kb: KB시세(0이면 매매가로 LTV 계산)
-  quick:{price:0, kb:0, borrow:0, method:'원리금균등', region:REGIONS[1], area:0},
+  quick:{price:0, kb:0, borrow:0, method:'원리금균등', region:REGIONS[1], area:0, apt:true},
   // 신용대출: 모자란 돈을 채울 때. 한도 = min(연소득×배수, DSR 여유). DSR은 신용대출을 만기 5년으로 나눠 계산해요.
   // first: 주담대 실행 전에 신용대출을 먼저 받는지
   // borrow: 빌릴 신용대출(0이면 모자란 만큼, 최대 한도까지)
@@ -108,11 +108,12 @@ function calc(S){
       if(+Q.area) checks.push([`전용 ${d.area}㎡ 이하`,+Q.area<=d.area]);
     }
     const ok=checks.every(c=>c[1]);
-    const bang=!isB&&d.bang?bangOf(Q.region):0;
+    // 방공제: 디딤돌은 아파트도 빼고, 보금자리론은 아파트면 안 빼고 빌라 등 비아파트만 빼요
+    const bang=(isB?Q.apt===false:d.bang)?bangOf(Q.region):0;
     const K=+Q.kb||0, base=K?(P?Math.min(P,K):K):P, useKb=K>0&&(!P||K<P);
     const ltvCap=base?Math.max(0,base*(isB?g.ltv:d.ltv)-bang):null;
     const limit=isB?gLimit:dLimit, per1=isB?gPer1:dPer1, dtiRate=isB?g.dti:d.dti;
-    const ltvLabel=`${useKb?'KB시세':'집값'}의 ${pct(isB?g.ltv:d.ltv)}${!isB&&bang?' − 방공제':''}`;
+    const ltvLabel=`${useKb?'KB시세':'집값'}의 ${pct(isB?g.ltv:d.ltv)}${bang?' − 방공제':''}`;
     const Co=S.company, coAmt=+Co.amount||0, coMonthly=coAmt?pmt(Co.rate/12,Math.max(1,Co.years)*12,coAmt):0;
     const C=S.credit, perWon=1/C.years+C.rate, coDsr=Co.dsr?coMonthly*12:0;
     // 주담대: extra는 DTI에 더 잡힐 다른 대출의 1년 이자(회사대출, 먼저 받은 신용대출)
@@ -301,7 +302,8 @@ function quickView(kind,S,R){
       field('대출 기간 (년)','base.term','sel',TERMS),
       field('상환 방식','quick.method','sel',['원리금균등','원금균등']),
       field('보유 현금','base.cash','won'),
-      isB?null:field('지역 (방공제)','quick.region','sel',REGIONS),
+      isB?field('아파트인가요? (아니면 방공제)','quick.apt','yn'):null,
+      !isB||Q.apt===false?field('지역 (방공제)','quick.region','sel',REGIONS):null,
       isB?null:field('전용면적 (㎡, 모르면 비움)','quick.area','num'),
       field('빌릴 금액 (비우면 최대)','quick.borrow','won'),
       field('회사대출 금액','company.amount','won'),
@@ -321,6 +323,7 @@ function quickView(kind,S,R){
     P?el('dl',{class:'ldl'},
       el('dt',{},'집값'),el('dd',{},eok(P)),
       el('dt',{},'취득세·중개·등기 등 부대비용'),el('dd',{},eok(q.fee)),
+      q.bang?[el('dt',{},`방공제 (${Q.region})`),el('dd',{},eok(q.bang)+' 한도에서 빠짐')]:null,
       el('dt',{},'대출'),el('dd',{},'− '+eok(q.loan)),
       el('dt',{},el('b',{},'내 돈이 필요한 금액')),el('dd',{},el('b',{},eok(P+q.fee-q.loan))),
       el('dt',{},'· 보유 현금'),el('dd',{},eok(S.base.cash)),
