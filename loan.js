@@ -300,6 +300,7 @@ function quickView(kind,S,R){
       field('생애최초 주택구입','base.first','yn'),
       isB?null:field('만 30세 이상','base.age30','yn'),
       field('대출 기간 (년)','base.term','sel',TERMS),
+      isB?field('보금자리론 금리 (우대 전)','bog.rate','pct'):null,
       field('상환 방식','quick.method','sel',['원리금균등','원금균등']),
       field('보유 현금','base.cash','won'),
       isB?field('아파트인가요? (아니면 방공제)','quick.apt','yn'):null,
