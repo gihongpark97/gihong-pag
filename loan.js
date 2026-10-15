@@ -17,7 +17,7 @@ const DEFAULTS={
   // borrow: 빌릴 신용대출(0이면 모자란 만큼, 최대 한도까지)
   credit:{rate:0.05, mult:1, dsr:0.4, years:5, first:true, borrow:0},
   // 회사대출(사내 주택자금 등): 필요한 현금을 먼저 채우고, 월 납입액에 더해요. dsr이 참이면 신용대출 DSR 계산에도 넣어요.
-  company:{amount:0, rate:0.02, years:5, dsr:true},
+  company:{amount:0, rate:0.02, years:5, dsr:true, first:true},
   // 시세 조회: 공공데이터 인증키, 마지막 검색어, 직접 적어 둔 KB시세(단지별)
   price:{key:'', sgg:'', name:'', kb:{}},
   cost:{tax:0.011, relief:2000000, broker:0.0044, fixed:3000000},
@@ -116,7 +116,8 @@ function calc(S){
     const Co=S.company, coAmt=+Co.amount||0, coMonthly=coAmt?pmt(Co.rate/12,Math.max(1,Co.years)*12,coAmt):0;
     const C=S.credit, perWon=1/C.years+C.rate, coDsr=Co.dsr?coMonthly*12:0;
     // 주담대: extra는 DTI에 더 잡힐 다른 대출의 1년 이자(회사대출, 먼저 받은 신용대출)
-    const coInt=coAmt*Co.rate;
+    // 회사대출을 주담대보다 나중에 받으면 주담대 DTI 심사 때는 안 잡혀요
+    const coInt=Co.first===false?0:coAmt*Co.rate;
     function mortgage(extra){
       const dtiCap=Math.max(0,(income*dtiRate-b.debt-extra)/per1);
       const caps=[['상품 한도',limit],['소득 기준(DTI)',dtiCap]]; if(ltvCap!=null) caps.unshift([ltvLabel,ltvCap]);
@@ -304,7 +305,7 @@ function quickView(kind,S,R){
       isB?null:field('전용면적 (㎡, 모르면 비움)','quick.area','num'),
       field('빌릴 금액 (비우면 최대)','quick.borrow','won'),
       field('회사대출 금액','company.amount','won'),
-      +S.company.amount?[field('회사대출 금리','company.rate','pct'),field('회사대출 기간 (년)','company.years','num'),field('회사대출 DSR에 포함','company.dsr','yn')]:null,
+      +S.company.amount?[field('회사대출 금리','company.rate','pct'),field('회사대출 기간 (년)','company.years','num'),field(`회사대출 ${isB?'보금자리론':'디딤돌'}보다 먼저 받기`,'company.first','yn'),field('회사대출 DSR에 포함','company.dsr','yn')]:null,
       field('기존 대출 연간 원리금','base.debt','won')),
     el('p',{class:'lnote'},married?'신혼: 혼인 7년 이내, 부부 합산 소득으로 심사해요.':'미혼: 기홍 단독 명의 기준이에요.'));
   const big=(label,value,sub,cls)=>el('div',{class:'lbig'+(cls?' '+cls:'')},el('span',{class:'llab'},label),el('b',{},value),sub?el('span',{class:'lsub'},sub):null);
@@ -370,7 +371,8 @@ function creditBox(S,q){
         el('li',{},'주거래·급여 은행부터: 급여이체 은행이 한도·금리를 가장 잘 줘요. 직장인 우대 상품(공무원·대기업 전용 등)이 있으면 먼저 보세요.'),
         el('li',{},'소득 증빙을 최대로: 최근 연봉 인상분, 성과급이 반영된 원천징수영수증이나 소득금액증명을 내세요. 부부라면 각자 명의로 따로 받을 수 있어요.'),
         el('li',{},'1억 넘게 받으면 조심: 신용대출 합계가 1억을 넘으면 1년 안에 규제지역 집을 살 때 회수될 수 있고, 스트레스 DSR도 붙어요. 1억 이하로 맞추는 게 안전해요.'),
-        el('li',{},'시점: 신용대출은 보금자리론 신청 전에 실행까지 끝내야 해요. 보금자리론 심사(DTI)엔 신용대출 이자가 들어가니 숨기지 말고 그대로 신고하세요. 집 거래 신고 때 자금조달계획서를 내는 경우엔 신용대출도 적어야 해요.'))));
+        el('li',{},'시점: 신용대출은 보금자리론 신청 전에 실행까지 끝내야 해요. 보금자리론 심사(DTI)엔 신용대출 이자가 들어가니 숨기지 말고 그대로 신고하세요. 집 거래 신고 때 자금조달계획서를 내는 경우엔 신용대출도 적어야 해요.'),
+        el('li',{},'회사대출: 주담대를 실행한 뒤에 받으면 주담대 DTI 심사에 안 잡혀서 주담대 한도가 커질 수 있어요. 다만 잔금 날짜에 맞춰야 해서 먼저 받아야 하면 "먼저 받기"를 예로 두세요. 신용대출 DSR에는 순서와 상관없이 잡힌다고 보고 계산해요.'))));
   return box;
 }
 function tile(name,status,ok,pairs){
