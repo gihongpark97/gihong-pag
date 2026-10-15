@@ -11,7 +11,7 @@ const DEFAULTS={
   base:{married:'미혼', first:true, age30:true, incG:0, incJ:0, cash:0, debt:0, term:30},
   // 빠른 계산: 집값만 넣으면 상품별 대출·월 상환액을 보여줘요. borrow가 0이면 최대한도로 빌려요.
   // kb: KB시세(0이면 매매가로 LTV 계산)
-  quick:{price:0, kb:0, borrow:0, method:'원리금균등', region:REGIONS[1], area:0, apt:true},
+  quick:{price:0, kb:0, borrow:0, method:'원리금균등', region:REGIONS[1], area:0, apt:true, kbPick:'KB일반시세'},
   // 신용대출: 모자란 돈을 채울 때. 한도 = min(연소득×배수, DSR 여유). DSR은 신용대출을 만기 5년으로 나눠 계산해요.
   // first: 주담대 실행 전에 신용대출을 먼저 받는지
   // borrow: 빌릴 신용대출(0이면 모자란 만큼, 최대 한도까지)
@@ -231,6 +231,8 @@ function field(label,path,kind,opts){
 /* ---------- 화면 ---------- */
 // 입력 중에는 입력칸을 그대로 두고 결과 카드만 다시 그려요(키보드가 안 닫히게)
 function softRender(){
+  if(root&&tab==='cmp'){ const old=root.querySelector('.lsheet'), rows=state.listings.filter(L=>L.kind==='sheet');
+    if(old&&rows.length){ old.replaceWith(sheetTable(rows)); return; } return render(); }
   if(!root||(tab!=='bog'&&tab!=='did')) return render();
   const old=root.querySelector('.lresult'); if(!old) return render();
   const S=state.settings, fresh=quickView(tab,S,calc(S)).querySelector('.lresult'); if(!fresh) return;
@@ -306,6 +308,7 @@ function renderNow(){
   const editing=state.listings.find(L=>L.id===editingId);
   const list=el('section',{class:'llist'},
     el('div',{class:'lbar'},el('h2',{},'매물 비교'),el('div',{class:'lbtns'},importBtn,el('button',{class:'chip',type:'button',onclick:downloadTemplate},'엑셀 양식 받기'),add)),
+    sheetRows.length?sheetOptions(S):null,
     sheetRows.length?sheetTable(sheetRows):null,
     editing?editForm(editing):null,
     groups.length||editing||sheetRows.length?null:el('div',{class:'empty'},el('b',{},'아직 비교할 매물이 없어요'),el('span',{},'매물 추가를 눌러 가격과 지역을 넣거나, 엑셀 파일을 불러오면 대출액과 월 상환액이 바로 계산돼요.')),
@@ -498,29 +501,57 @@ const SHEET_COLS=[
   ['total','총지급액','won'],['bogLoan','보금자리대출','won'],['loanCash','대출+현금','won'],['left','남은금액','won'],
   ['ok','가능여부'],['moveIn','입주가능일'],['url','네이버링크','url'],['agent','부동산'],['memo','비고'],['visit','임장'],['feature','단지별특징']];
 const wonFmt=v=>v===''||v==null||isNaN(v)?'':(v<0?`(₩${Math.round(-v).toLocaleString('ko-KR')})`:`₩${Math.round(v).toLocaleString('ko-KR')}`);
+// 보금자리론 탭과 같은 옵션(공유)으로 매물마다 다시 계산해요
+function sheetOptions(S){
+  const Q=S.quick;
+  return el('section',{class:'lcard lsheetopt'},
+    el('div',{class:'lbar'},el('h3',{},'비교 기준 (소득·현금은 위 기본 정보, 나머지는 보금자리론 탭과 같이 바뀌어요)')),
+    el('div',{class:'lgrid'},
+      field('대출 기준 KB시세','quick.kbPick','sel',['KB일반시세','KB하위시세']),
+      field('보금자리론 금리 (우대 전)','bog.rate','pct'),
+      field('상환 방식','quick.method','sel',['원리금균등','원금균등']),
+      field('아파트인가요? (아니면 방공제)','quick.apt','yn'),
+      Q.apt===false?field('지역 (방공제)','quick.region','sel',REGIONS):null,
+      field('회사대출 금액','company.amount','won'),
+      +S.company.amount?[field('회사대출 금리','company.rate','pct'),field('회사대출 기간 (년)','company.years','num'),field('회사대출 보금자리론보다 먼저 받기','company.first','yn'),field('회사대출 DSR에 포함','company.dsr','yn')]:null,
+      field('신용대출 먼저 받기 (주담대 실행 전)','credit.first','yn'),
+      field('신용대출 금리','credit.rate','pct')),
+    el('p',{class:'lnote'},'신용대출은 매물마다 모자란 만큼만 빌린다고 보고, 최대 한도까지만 잡아요. 대출은 매수가와 KB시세 중 낮은 값으로 계산해요.'));
+}
 function sheetTable(rows){
-  // 엑셀에 없으면 계산해서 채워요: 총지급액 = 매수가 + 부대비용, 남은금액 = 대출+현금 − 총지급액
-  const fee=calc(state.settings).fee;
-  const val=(L,k)=>{
-    if(k==='total'&&L.total===''&&+L.price) return +L.price+fee(+L.price);
-    if(k==='left'&&L.left===''&&L.loanCash!=='') return +L.loanCash-val(L,'total');
-    return L[k]; };
-  const cols=SHEET_COLS.filter(([k])=>rows.some(L=>L[k]!==''&&L[k]!=null)||k==='left'||k==='total');
+  const S=state.settings, Sx={...S,credit:{...S.credit,borrow:0}}, R=calc(Sx);
+  const kbKey=S.quick.kbPick==='KB하위시세'?'kbLow':'kb';
+  // 매물마다 보금자리론 계산: 매수가·KB시세만 바꾸고 나머지 옵션은 보금자리론 탭 그대로
+  const calcRow=L=>{ const P=+L.price||0; if(!P) return null;
+    const q=R.quick('bog',{...S.quick,price:P,kb:+L[kbKey]||+L.kb||0,borrow:0});
+    const total=P+q.fee, have=(+S.base.cash||0)+q.company.amount+q.credit.use, left=have-(total-q.loan);
+    const cap=q.caps.length?q.caps.reduce((a,c)=>c[1]<a[1]?c:a)[0]:'';
+    return {q,total,left,cap,monthly:q.first+q.company.monthly+q.credit.monthly,ok:q.ok&&left>=0&&(q.dti==null||q.dti<=q.dtiLimit+1e-9)}; };
+  const COMP=[
+    ['c_total','총지급액',x=>x.total,'won'],['c_loan','보금자리론',x=>x.q.loan,'won'],['c_cap','한도 기준',x=>x.cap.replace('소득 기준(DTI)','DTI')],
+    ['c_co','회사대출',x=>x.q.company.amount,'won'],['c_credit','신용대출',x=>x.q.credit.use,'won'],['c_cmax','신용 최대',x=>x.q.credit.max,'won'],
+    ['c_left','남은금액',x=>x.left,'won'],['c_mon','월 상환 합계',x=>x.monthly,'won'],
+    ['c_dti','DTI',x=>x.q.dti==null?'':pct(x.q.dti)],['c_dsr','DSR',x=>x.q.dsr==null?'':pct(x.q.dsr)],['c_ok','가능',x=>x.ok?'O':'X']];
+  const HIDE=new Set(['total','bogLoan','loanCash','left','ok']);
+  const info=SHEET_COLS.filter(([k])=>!HIDE.has(k)&&rows.some(L=>L[k]!==''&&L[k]!=null));
+  const at=info.findIndex(([k])=>k==='price')+1;
+  const cols=[...info.slice(0,at),...COMP.map(([k,h,f,kind])=>[k,h,kind,f]),...info.slice(at)];
   const villages=[]; rows.forEach(L=>{ const key=(L.vno??'')+'|'+(L.village??''); let v=villages[villages.length-1];
     if(!v||v.key!==key){ v={key,rows:[]}; villages.push(v); } v.rows.push(L); });
-  const head=el('tr',{},...cols.map(([,h])=>el('th',{},h)));
+  const head=el('tr',{},...cols.map(([k,h])=>el('th',{class:k.startsWith('c_')?'lcomp':''},h)));
   const body=[]; villages.forEach((v,vi)=>{
     const cplx=[]; v.rows.forEach(L=>{ let c=cplx[cplx.length-1]; if(!c||c.name!==L.name){ c={name:L.name,n:0}; cplx.push(c);} c.n++; L._c=c; });
     v.rows.forEach((L,i)=>{
-      const first=i===0, cFirst=i===0||v.rows[i-1]._c!==L._c;
-      const tds=cols.map(([k,,kind])=>{
-        if(k==='vno'||k==='village'){ return first?el('td',{rowspan:v.rows.length,class:'lsg'},String(L[k]??'')):null; }
-        if(k==='name'){ return cFirst?el('td',{rowspan:L._c.n,class:'lsg'},String(L[k]??'')):null; }
-        const x=val(L,k);
-        if(kind==='won') return el('td',{class:'lnum'+(x<0?' neg':'')},wonFmt(x===''?'':+x));
-        if(kind==='url') return el('td',{},x?el('a',{href:/^https?:/.test(x)?x:'https://'+x,target:'_blank',rel:'noopener'},'링크'):'');
-        if(k==='ok') return el('td',{class:'lok '+(/^o$/i.test(x)?'yes':/^x$/i.test(x)?'no':'')},String(x??''));
-        return el('td',{class:k==='memo'||k==='feature'?'lwrap':''},String(x??''));
+      const first=i===0, cFirst=i===0||v.rows[i-1]._c!==L._c, x=calcRow(L);
+      const tds=cols.map(([k,,kind,f])=>{
+        if(k==='vno'||k==='village') return first?el('td',{rowspan:v.rows.length,class:'lsg'},String(L[k]??'')):null;
+        if(k==='name') return cFirst?el('td',{rowspan:L._c.n,class:'lsg'},String(L[k]??'')):null;
+        const val=k.startsWith('c_')?(x?f(x):''):L[k], cc=k.startsWith('c_')?' lcomp':'';
+        if(kind==='won') return el('td',{class:'lnum'+cc+(val<0?' neg':'')},wonFmt(val===''?'':+val));
+        if(kind==='url') return el('td',{},val?el('a',{href:/^https?:/.test(val)?val:'https://'+val,target:'_blank',rel:'noopener'},'링크'):'');
+        if(k==='c_ok') return el('td',{class:'lok'+cc+(val==='O'?' yes':' no')},val);
+        if(k==='c_dti'&&x&&x.q.dti>x.q.dtiLimit) return el('td',{class:'lnum neg'+cc},val);
+        return el('td',{class:(k==='memo'||k==='feature'?'lwrap':'')+cc},String(val??''));
       }).filter(Boolean);
       body.push(el('tr',{class:(vi%2?'lb':'la')+(first?' lvstart':'')},...tds));
     }); });
@@ -528,7 +559,7 @@ function sheetTable(rows){
     el('div',{class:'lbar'},el('h3',{},`대출비교 시트 · ${villages.length}개 마을 ${rows.length}건`),
       el('button',{class:'chip del',type:'button',onclick:()=>{ if(!confirm('불러온 시트 매물을 모두 지울까요?')) return; state.listings=state.listings.filter(L=>L.kind!=='sheet'); save(); render(); }},'시트 매물 지우기')),
     el('div',{class:'ltablewrap'},el('table',{class:'ltable lsheett'},el('thead',{},head),el('tbody',{},...body))),
-    el('p',{class:'lnote'},'남은금액이 마이너스면 빨간 괄호로 보여요. 같은 엑셀을 다시 불러오면 시트 매물이 새 내용으로 바뀌어요. 엑셀에 총지급액이나 남은금액이 비어 있으면 계산해서 채워요.'));
+    el('p',{class:'lnote'},'초록 칸은 위 비교 기준으로 계산한 값이에요(총지급액은 부대비용 포함). 남은금액 = 보유현금 + 회사대출 + 신용대출 − (총지급액 − 보금자리론). 마이너스면 빨간 괄호로 보여요. "가능"은 자격·DTI·남은금액을 모두 통과하면 O예요. 같은 엑셀을 다시 불러오면 새 내용으로 바뀌어요.'));
 }
 async function downloadTemplate(){
   try{ await loadSheetJS(); }catch(e){ flash('엑셀 도구를 불러오지 못했어요.'); return; }
