@@ -149,7 +149,7 @@ function calc(S){
     }
     const later=solve(false), early=solve(true), pick=C.first?early:later, m=pick.m;
     const need=P?P+f-m.loan-coAmt:null, left=need==null?null:b.cash-need;
-    return {ok,checks,caps:m.caps,max:m.max,loan:m.loan,rate,first:m.first,last:m.last,interest:m.interest,fee:f,bang,need,left,useKb,
+    return {ok,checks,caps:m.caps,max:m.max,loan:m.loan,rate,first:m.first,last:m.last,interest:m.interest,fee:f,bang,need,left,useKb,base,kb:K,
       company:{amount:coAmt,monthly:coMonthly},
       share:income?(m.first+coMonthly)*12/income:null,
       credit:pick.credit, creditAlt:(C.first?later:early).credit,
@@ -316,7 +316,7 @@ function quickView(kind,S,R){
   const result=el('section',{class:'lcard lresult'},head,
     el('div',{class:'lbigs'},
       big('월 상환액',q.loan?won(q.first):'-',Q.method==='원금균등'&&q.loan?`첫 달 기준 · 마지막 달 ${won(q.last)}`:(q.loan?`${S.base.term}년 동안 매달 같은 금액`:null),'main'),
-      big('대출 금액',q.loan?eok(q.loan):'-',q.max&&+Q.borrow>0&&q.loan<q.max?`최대 ${eok(q.max)}까지 가능`:(q.max?'최대한도 기준':null)),
+      big('대출 금액',q.loan?eok(q.loan):'-',q.max&&+Q.borrow>0&&q.loan<q.max?`최대 ${eok(q.max)}까지 가능`:(q.max?`${q.caps.reduce((a,c)=>c[1]<a[1]?c:a)[0]} 기준`:null)),
       big('적용 금리',pct(q.rate),isB?(married?'신혼 우대 반영':'고정금리'):'소득·기간별 금리 + 우대'),
       big('총 이자',q.loan?eok(q.interest):'-',q.loan?`${S.base.term}년 동안`:null),
       big('DTI',q.dti!=null&&q.loan?pct(q.dti):'-',q.dti!=null&&q.loan?`한도 ${pct(q.dtiLimit)} · ${q.dti>q.dtiLimit?'초과':'이내'}`:(q.loan?'연소득을 넣어 주세요':null),q.dti!=null&&q.loan&&q.dti>q.dtiLimit?'over':null)),
@@ -324,6 +324,7 @@ function quickView(kind,S,R){
       el('dt',{},'집값'),el('dd',{},eok(P)),
       el('dt',{},'취득세·중개·등기 등 부대비용'),el('dd',{},eok(q.fee)),
       q.bang?[el('dt',{},`방공제 (${Q.region})`),el('dd',{},eok(q.bang)+' 한도에서 빠짐')]:null,
+      el('dt',{},'대출 기준 가격'),el('dd',{},q.kb?(q.useKb?`KB시세 ${eok(q.base)} (집값보다 낮아요)`:`집값 ${eok(q.base)} (KB시세보다 낮거나 같아요)`):`집값 ${eok(q.base)}`),
       el('dt',{},'대출'),el('dd',{},'− '+eok(q.loan)),
       el('dt',{},el('b',{},'내 돈이 필요한 금액')),el('dd',{},el('b',{},eok(P+q.fee-q.loan))),
       el('dt',{},'· 보유 현금'),el('dd',{},eok(S.base.cash)),
