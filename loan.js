@@ -322,10 +322,23 @@ function renderNow(){
   root.replaceChildren(...[top,tabs,tiles,basics,el('div',{class:'ltools'},toggle),settings,list].filter(Boolean));
   setStatus(ref?'모든 기기에 저장됨':(window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.apiKey?'불러오는 중…':'이 기기에만 저장됨'));
 }
+// 매물 비교 시트에 불러온 매물을 골라 집값·KB시세를 채워요
+function sheetPicker(S){
+  const rows=state.listings.filter(L=>L.kind==='sheet'&&+L.price); if(!rows.length) return null;
+  const label=L=>[L.village,L.name,L.pyeong,L.floor,L.unit].filter(Boolean).join(' ')+` · ${eok(+L.price)}`;
+  const kbKey=S.quick.kbPick==='KB하위시세'?'kbLow':'kb';
+  const cur=rows.find(L=>+L.price===+S.quick.price&&(+L[kbKey]||+L.kb||0)===+S.quick.kb);
+  const sel=el('select',{id:'lf-sheetpick'},el('option',{value:''},'직접 입력'),...rows.map(L=>el('option',{value:L.id,selected:cur===L},label(L))));
+  sel.onchange=()=>{ const L=rows.find(x=>x.id===sel.value); if(!L) return;
+    S.quick.price=+L.price; S.quick.kb=+L[kbKey]||+L.kb||0; save(); setTimeout(render,0); flash(`${L.name||'매물'} ${L.unit||''} 매수가와 ${S.quick.kbPick}를 넣었어요.`); };
+  return [el('label',{class:'lfield lwide',for:'lf-sheetpick'},el('span',{class:'llab'},'매물 비교 시트에서 불러오기'),el('span',{class:'lin'},sel)),
+    field('불러올 KB시세','quick.kbPick','sel',['KB일반시세','KB하위시세'])];
+}
 function quickView(kind,S,R){
   const Q=S.quick, married=S.base.married==='신혼', q=R.quick(kind,Q), isB=kind==='bog';
   const inputs=el('section',{class:'lcard'},el('h2',{},'입력'),
     el('div',{class:'lgrid'},
+      sheetPicker(S),
       field('집값 (매매가)','quick.price','won'),
       field('KB시세 (모르면 비움)','quick.kb','won'),
       field('혼인 상태','base.married','sel',['미혼','신혼']),
@@ -528,10 +541,8 @@ function sheetTable(rows){
     const cap=q.caps.length?q.caps.reduce((a,c)=>c[1]<a[1]?c:a)[0]:'';
     return {q,total,left,cap,monthly:q.first+q.company.monthly+q.credit.monthly,ok:q.ok&&left>=0&&(q.dti==null||q.dti<=q.dtiLimit+1e-9)}; };
   const COMP=[
-    ['c_total','총지급액',x=>x.total,'won'],['c_loan','보금자리론',x=>x.q.loan,'won'],['c_cap','한도 기준',x=>x.cap.replace('소득 기준(DTI)','DTI')],
-    ['c_co','회사대출',x=>x.q.company.amount,'won'],['c_credit','신용대출',x=>x.q.credit.use,'won'],['c_cmax','신용 최대',x=>x.q.credit.max,'won'],
-    ['c_left','남은금액',x=>x.left,'won'],['c_mon','월 상환 합계',x=>x.monthly,'won'],
-    ['c_dti','DTI',x=>x.q.dti==null?'':pct(x.q.dti)],['c_dsr','DSR',x=>x.q.dsr==null?'':pct(x.q.dsr)],['c_ok','가능',x=>x.ok?'O':'X']];
+    ['c_loan','담보대출',x=>x.q.loan,'won'],['c_credit','신용대출',x=>x.q.credit.use,'won'],
+    ['c_mon','월 상환',x=>x.monthly,'won'],['c_left','현금 여유',x=>x.left,'won']];
   const HIDE=new Set(['total','bogLoan','loanCash','left','ok']);
   const info=SHEET_COLS.filter(([k])=>!HIDE.has(k)&&rows.some(L=>L[k]!==''&&L[k]!=null));
   const at=info.findIndex(([k])=>k==='price')+1;
@@ -559,7 +570,7 @@ function sheetTable(rows){
     el('div',{class:'lbar'},el('h3',{},`대출비교 시트 · ${villages.length}개 마을 ${rows.length}건`),
       el('button',{class:'chip del',type:'button',onclick:()=>{ if(!confirm('불러온 시트 매물을 모두 지울까요?')) return; state.listings=state.listings.filter(L=>L.kind!=='sheet'); save(); render(); }},'시트 매물 지우기')),
     el('div',{class:'ltablewrap'},el('table',{class:'ltable lsheett'},el('thead',{},head),el('tbody',{},...body))),
-    el('p',{class:'lnote'},'초록 칸은 위 비교 기준으로 계산한 값이에요(총지급액은 부대비용 포함). 남은금액 = 보유현금 + 회사대출 + 신용대출 − (총지급액 − 보금자리론). 마이너스면 빨간 괄호로 보여요. "가능"은 자격·DTI·남은금액을 모두 통과하면 O예요. 같은 엑셀을 다시 불러오면 새 내용으로 바뀌어요.'));
+    el('p',{class:'lnote'},'초록 칸은 위 비교 기준으로 계산한 값이에요. 담보대출은 보금자리론, 신용대출은 모자란 만큼(최대 한도까지), 월 상환은 보금자리론·회사대출·신용대출 이자를 합친 금액이에요. 현금 여유 = 보유현금 + 회사대출 + 신용대출 − (매수가 + 부대비용 − 담보대출)이고, 마이너스면 빨간 괄호로 보여요. 같은 엑셀을 다시 불러오면 새 내용으로 바뀌어요.'));
 }
 async function downloadTemplate(){
   try{ await loadSheetJS(); }catch(e){ flash('엑셀 도구를 불러오지 못했어요.'); return; }
