@@ -210,21 +210,49 @@ function field(label,path,kind,opts){
   else if(kind==='yn'){ input=el('select',{id},el('option',{value:'1',selected:!!v},'예'),el('option',{value:'0',selected:!v},'아니오')); }
   else { const shown=kind==='pct'?+(v*100).toFixed(4):(kind==='won'?(v?Number(v).toLocaleString('ko-KR'):''):v);
     input=el('input',{id,type:'text',inputmode:kind==='text'?null:'decimal',value:shown,autocomplete:'off'}); }
-  const commit=()=>{ let raw=input.value, nv;
-    if(kind==='yn') nv=raw==='1'; else if(kind==='sel') nv=typeof v==='number'?+raw:raw;
-    else if(kind==='pct') nv=(parseFloat(raw.replace(/,/g,''))||0)/100;
-    else if(kind==='won'||kind==='num') nv=parseFloat(raw.replace(/[^0-9.\-]/g,''))||0;
-    else nv=raw;
-    put(path,nv); save(); render(); };
+  const parse=()=>{ const raw=input.value;
+    if(kind==='yn') return raw==='1'; if(kind==='sel') return typeof v==='number'?+raw:raw;
+    if(kind==='pct') return (parseFloat(raw.replace(/,/g,''))||0)/100;
+    if(kind==='won'||kind==='num') return parseFloat(raw.replace(/[^0-9.\-]/g,''))||0;
+    return raw; };
+  let typeT=null;
+  // render는 다음 틱에: 다른 칸을 눌러 생긴 change라면 그때 포커스가 새 칸에 가 있어서 render가 그 칸을 다시 잡아 줘요
+  const commit=()=>{ clearTimeout(typeT); put(path,parse()); save(); setTimeout(render,0); };
   input.onchange=commit;
-  if(kind==='won') input.oninput=()=>{ const s=input.selectionStart, before=input.value.length; const n=input.value.replace(/[^0-9]/g,''); input.value=n?Number(n).toLocaleString('ko-KR'):''; const d=input.value.length-before; try{ input.setSelectionRange(s+d,s+d);}catch(e){} };
   const hint=kind==='won'?el('span',{class:'lhint'},eok(v)):kind==='pct'?el('span',{class:'lhint'},'%'):null;
+  // 휴대폰은 입력칸 밖을 눌러도 change가 안 생길 때가 있어서, 타이핑을 멈추면 결과만 먼저 고쳐요
+  if(input.tagName==='INPUT') input.oninput=()=>{
+    if(kind==='won'){ const s=input.selectionStart, before=input.value.length; const n=input.value.replace(/[^0-9]/g,''); input.value=n?Number(n).toLocaleString('ko-KR'):''; const d=input.value.length-before; try{ input.setSelectionRange(s+d,s+d);}catch(e){} }
+    clearTimeout(typeT); typeT=setTimeout(()=>{ const nv=parse(); if(nv===get(path)) return; put(path,nv); save(); if(kind==='won'&&hint) hint.textContent=eok(nv); softRender(); },400); };
   return el('label',{class:'lfield',for:id},el('span',{class:'llab'},label),el('span',{class:'lin'},input,hint));
 }
 
 /* ---------- 화면 ---------- */
+// 입력 중에는 입력칸을 그대로 두고 결과 카드만 다시 그려요(키보드가 안 닫히게)
+function softRender(){
+  if(!root||(tab!=='bog'&&tab!=='did')) return render();
+  const old=root.querySelector('.lresult'); if(!old) return render();
+  const S=state.settings, fresh=quickView(tab,S,calc(S)).querySelector('.lresult'); if(!fresh) return;
+  const a=document.activeElement;
+  if(!old.contains(a)) { old.replaceWith(fresh); return; }
+  // 결과 카드 안 입력칸(빌릴 신용대출)에 있으면, 그 칸이 든 부분만 남기고 바꿔요
+  const keep=[...old.children].find(c=>c.contains(a)), idx=[...old.children].indexOf(keep);
+  [...fresh.children].forEach((c,i)=>{ if(i!==idx&&old.children[i]) old.children[i].replaceWith(c); });
+}
+// 휴대폰(iOS)은 빈 곳을 눌러도 입력칸 포커스가 안 빠져서 change가 안 생겨요. 빈 곳을 누르면 포커스를 빼요.
+document.addEventListener('touchend',e=>{ const a=document.activeElement;
+  if(root&&a&&a.tagName==='INPUT'&&root.contains(a)&&!(e.target.closest&&e.target.closest('input,select,textarea,label,button'))) a.blur(); },{passive:true});
+let rendering=false;
 function render(){
   if(!root) return;
+  // 다시 그리는 중에 포커스가 빠지면서 change가 또 render를 부르면, 끝난 뒤에 한 번 더 그려요
+  if(rendering){ setTimeout(render,0); return; }
+  // 다시 그려도 보고 있던 입력칸에 포커스와 커서를 그대로 둬요(휴대폰에서 다음 칸을 누르면 입력이 날아가던 문제)
+  const a=document.activeElement, id=a&&a.id&&root.contains(a)?a.id:null; let sel=null; try{ sel=a.selectionStart; }catch(e){}
+  rendering=true; try{ renderNow(); } finally{ rendering=false; }
+  if(id){ const n=document.getElementById(id); if(n&&n!==a){ if(n.tagName==='INPUT'&&a.tagName==='INPUT') n.value=a.value; n.focus({preventScroll:true}); if(sel!=null) try{ n.setSelectionRange(sel,sel); }catch(e){} } }
+}
+function renderNow(){
   const S=state.settings, R=calc(S), married=S.base.married==='신혼';
   const tabs=el('div',{class:'ltabs',role:'tablist'},...Object.entries(TABS).map(([k,v])=>el('button',{type:'button',role:'tab','aria-selected':String(tab===k),class:'ltab',onclick:()=>{ tab=k; try{ localStorage.setItem('hong.loan.tab',k); }catch(e){} render(); }},v)));
   if(tab==='price'){
