@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=0.5,maximum-scale=5,user-scalable=yes,viewport-fit=cover">
 <title>기홍이 홈페이지</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
@@ -323,6 +323,10 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
     </form>
   </div>
   <div class="backup">
+    <div class="llab">화면 크기</div>
+    <div class="lbtns"><button class="chip" id="zoomout" type="button" aria-label="화면 축소">−</button><span id="zoomval" style="min-width:3.2em;text-align:center">100%</span><button class="chip" id="zoomin" type="button" aria-label="화면 확대">+</button><button class="chip" id="zoomreset" type="button">기본</button></div>
+  </div>
+  <div class="backup">
     <div class="llab">백업 (이 기기 데이터)</div>
     <div class="lbtns"><button class="chip" id="bkout" type="button">파일로 저장</button><button class="chip" id="bkin" type="button">불러오기</button></div>
   </div>
@@ -390,14 +394,14 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=20261015g"></script>
-<script src="aptprice.js?v=20261015g"></script>
-<script src="loan.js?v=20261015g"></script>
-<script src="wedding.js?v=20261015g"></script>
-<script src="realty.js?v=20261015g"></script>
-<script src="imjang.js?v=20261015g"></script>
-<script src="stocks.js?v=20261015g"></script>
-<script src="admin.js?v=20261015g"></script>
+<script src="firebase-config.js?v=20261015h"></script>
+<script src="aptprice.js?v=20261015h"></script>
+<script src="loan.js?v=20261015h"></script>
+<script src="wedding.js?v=20261015h"></script>
+<script src="realty.js?v=20261015h"></script>
+<script src="imjang.js?v=20261015h"></script>
+<script src="stocks.js?v=20261015h"></script>
+<script src="admin.js?v=20261015h"></script>
 <script>
 const ICON = {
   chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -640,6 +644,15 @@ function noAccess(){
 }
 window.getDb=()=>({fs,userId});
 window.addEventListener('hashchange',()=>openList(location.hash.slice(1)));
+
+/* ---------- 화면 크기 ---------- */
+// 홈 화면에 추가한 앱처럼 두 손가락 확대가 안 되는 곳에서도 쓸 수 있게, 화면 전체 크기를 직접 조절해요(이 기기에만 저장)
+(()=>{ const KEY='hong.zoom', steps=[0.7,0.8,0.9,1,1.1,1.25,1.4,1.6];
+  let z=1; try{ z=parseFloat(localStorage.getItem(KEY))||1; }catch(e){}
+  const apply=()=>{ document.body.style.zoom=z===1?'':String(z); $('zoomval').textContent=Math.round(z*100)+'%'; try{ localStorage.setItem(KEY,String(z)); }catch(e){} };
+  const step=d=>{ const i=steps.findIndex(s=>s>=z-1e-6); z=steps[Math.max(0,Math.min(steps.length-1,(i<0?steps.length-1:i)+d))]; apply(); };
+  $('zoomout').onclick=()=>step(-1); $('zoomin').onclick=()=>step(1); $('zoomreset').onclick=()=>{ z=1; apply(); };
+  apply(); })();
 
 /* ---------- 백업 ---------- */
 $('bkout').onclick=()=>{
