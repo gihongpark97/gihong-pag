@@ -11,7 +11,7 @@ const DEFAULTS={
   base:{married:'미혼', first:true, age30:true, incG:0, incJ:0, cash:0, debt:0, term:30},
   // 빠른 계산: 집값만 넣으면 상품별 대출·월 상환액을 보여줘요. borrow가 0이면 최대한도로 빌려요.
   // kb: KB시세(0이면 매매가로 LTV 계산)
-  quick:{price:0, kb:0, borrow:0, method:'원리금균등', region:REGIONS[1], area:0, apt:true, kbPick:'KB일반시세'},
+  quick:{price:0, kb:0, borrow:0, method:'원리금균등', region:REGIONS[1], area:0, apt:true},
   // 신용대출: 모자란 돈을 채울 때. 한도 = min(연소득×배수, DSR 여유). DSR은 신용대출을 만기 5년으로 나눠 계산해요.
   // first: 주담대 실행 전에 신용대출을 먼저 받는지
   // borrow: 빌릴 신용대출(0이면 모자란 만큼, 최대 한도까지)
@@ -307,7 +307,8 @@ function renderNow(){
   const groups=BANDS.map(bn=>({bn,items:rows.filter(x=>x.L.id===editingId?false:(x.r&&band(+x.L.price)===bn)).sort((a,b)=>(+a.L.minutes||999)-(+b.L.minutes||999))})).filter(g=>g.items.length);
   const editing=state.listings.find(L=>L.id===editingId);
   const list=el('section',{class:'llist'},
-    el('div',{class:'lbar'},el('h2',{},'매물 비교'),el('div',{class:'lbtns'},importBtn,el('button',{class:'chip',type:'button',onclick:downloadTemplate},'엑셀 양식 받기'),add)),
+    el('div',{class:'lbar'},el('h2',{},'매물 비교'),el('div',{class:'lbtns'},importBtn,el('button',{class:'chip',type:'button',onclick:downloadTemplate},'엑셀 양식 받기'),
+      state.listings.length?el('button',{class:'chip del',type:'button',onclick:()=>{ if(!confirm(`매물 ${state.listings.length}건을 모두 지울까요? 되돌릴 수 없어요.`)) return; state.listings=[]; editingId=null; save(); render(); flash('매물을 모두 지웠어요.'); }},'전체 삭제'):null,add)),
     sheetRows.length?sheetOptions(S):null,
     sheetRows.length?sheetTable(sheetRows):null,
     editing?editForm(editing):null,
@@ -322,17 +323,18 @@ function renderNow(){
   root.replaceChildren(...[top,tabs,tiles,basics,el('div',{class:'ltools'},toggle),settings,list].filter(Boolean));
   setStatus(ref?'모든 기기에 저장됨':(window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.apiKey?'불러오는 중…':'이 기기에만 저장됨'));
 }
+// 1층은 KB하위시세, 나머지 층은 KB일반시세로 대출을 봐요(하위시세가 없으면 일반시세)
+const isFirstFloor=L=>/^\s*1\s*층?\s*$/.test(String(L.floor??''));
+const kbFor=L=>(isFirstFloor(L)?(+L.kbLow||+L.kb):(+L.kb||+L.kbLow))||0;
 // 매물 비교 시트에 불러온 매물을 골라 집값·KB시세를 채워요
 function sheetPicker(S){
   const rows=state.listings.filter(L=>L.kind==='sheet'&&+L.price); if(!rows.length) return null;
   const label=L=>[L.village,L.name,L.pyeong,L.floor,L.unit].filter(Boolean).join(' ')+` · ${eok(+L.price)}`;
-  const kbKey=S.quick.kbPick==='KB하위시세'?'kbLow':'kb';
-  const cur=rows.find(L=>+L.price===+S.quick.price&&(+L[kbKey]||+L.kb||0)===+S.quick.kb);
+  const cur=rows.find(L=>+L.price===+S.quick.price&&kbFor(L)===+S.quick.kb);
   const sel=el('select',{id:'lf-sheetpick'},el('option',{value:''},'직접 입력'),...rows.map(L=>el('option',{value:L.id,selected:cur===L},label(L))));
   sel.onchange=()=>{ const L=rows.find(x=>x.id===sel.value); if(!L) return;
-    S.quick.price=+L.price; S.quick.kb=+L[kbKey]||+L.kb||0; save(); setTimeout(render,0); flash(`${L.name||'매물'} ${L.unit||''} 매수가와 ${S.quick.kbPick}를 넣었어요.`); };
-  return [el('label',{class:'lfield lwide',for:'lf-sheetpick'},el('span',{class:'llab'},'매물 비교 시트에서 불러오기'),el('span',{class:'lin'},sel)),
-    field('불러올 KB시세','quick.kbPick','sel',['KB일반시세','KB하위시세'])];
+    S.quick.price=+L.price; S.quick.kb=kbFor(L); save(); setTimeout(render,0); flash(`${L.name||'매물'} ${L.unit||''} 매수가와 ${isFirstFloor(L)?'KB하위시세(1층)':'KB일반시세'}를 넣었어요.`); };
+  return el('label',{class:'lfield lwide',for:'lf-sheetpick'},el('span',{class:'llab'},'매물 비교 시트에서 불러오기 (1층은 KB하위시세)'),el('span',{class:'lin'},sel));
 }
 function quickView(kind,S,R){
   const Q=S.quick, married=S.base.married==='신혼', q=R.quick(kind,Q), isB=kind==='bog';
@@ -520,7 +522,6 @@ function sheetOptions(S){
   return el('section',{class:'lcard lsheetopt'},
     el('div',{class:'lbar'},el('h3',{},'비교 기준 (소득·현금은 위 기본 정보, 나머지는 보금자리론 탭과 같이 바뀌어요)')),
     el('div',{class:'lgrid'},
-      field('대출 기준 KB시세','quick.kbPick','sel',['KB일반시세','KB하위시세']),
       field('보금자리론 금리 (우대 전)','bog.rate','pct'),
       field('상환 방식','quick.method','sel',['원리금균등','원금균등']),
       field('아파트인가요? (아니면 방공제)','quick.apt','yn'),
@@ -529,14 +530,13 @@ function sheetOptions(S){
       +S.company.amount?[field('회사대출 금리','company.rate','pct'),field('회사대출 기간 (년)','company.years','num'),field('회사대출 보금자리론보다 먼저 받기','company.first','yn'),field('회사대출 DSR에 포함','company.dsr','yn')]:null,
       field('신용대출 먼저 받기 (주담대 실행 전)','credit.first','yn'),
       field('신용대출 금리','credit.rate','pct')),
-    el('p',{class:'lnote'},'신용대출은 매물마다 모자란 만큼만 빌린다고 보고, 최대 한도까지만 잡아요. 대출은 매수가와 KB시세 중 낮은 값으로 계산해요.'));
+    el('p',{class:'lnote'},'신용대출은 매물마다 모자란 만큼만 빌린다고 보고, 최대 한도까지만 잡아요. 대출은 매수가와 KB시세 중 낮은 값으로 계산하고, 1층은 KB하위시세, 나머지 층은 KB일반시세를 써요.'));
 }
 function sheetTable(rows){
   const S=state.settings, Sx={...S,credit:{...S.credit,borrow:0}}, R=calc(Sx);
-  const kbKey=S.quick.kbPick==='KB하위시세'?'kbLow':'kb';
   // 매물마다 보금자리론 계산: 매수가·KB시세만 바꾸고 나머지 옵션은 보금자리론 탭 그대로
   const calcRow=L=>{ const P=+L.price||0; if(!P) return null;
-    const q=R.quick('bog',{...S.quick,price:P,kb:+L[kbKey]||+L.kb||0,borrow:0});
+    const q=R.quick('bog',{...S.quick,price:P,kb:kbFor(L),borrow:0});
     const total=P+q.fee, have=(+S.base.cash||0)+q.company.amount+q.credit.use, left=have-(total-q.loan);
     const cap=q.caps.length?q.caps.reduce((a,c)=>c[1]<a[1]?c:a)[0]:'';
     return {q,total,left,cap,monthly:q.first+q.company.monthly+q.credit.monthly,ok:q.ok&&left>=0&&(q.dti==null||q.dti<=q.dtiLimit+1e-9)}; };
