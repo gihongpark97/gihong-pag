@@ -11,7 +11,7 @@ const DEFAULTS={
   base:{married:'미혼', first:true, age30:true, incG:0, incJ:0, cash:0, debt:0, term:30},
   // 빠른 계산: 집값만 넣으면 상품별 대출·월 상환액을 보여줘요. borrow가 0이면 최대한도로 빌려요.
   // kb: KB시세(0이면 매매가로 LTV 계산)
-  quick:{price:0, kb:0, borrow:0, method:'원리금균등', region:REGIONS[1], area:0, apt:true},
+  quick:{price:0, kb:0, borrow:0, method:'원리금균등', region:REGIONS[1], area:0, apt:true, gradMult:2.7},
   // 신용대출: 모자란 돈을 채울 때. 한도 = min(연소득×배수, DSR 여유). DSR은 신용대출을 만기 5년으로 나눠 계산해요.
   // first: 주담대 실행 전에 신용대출을 먼저 받는지
   // borrow: 빌릴 신용대출(0이면 모자란 만큼, 최대 한도까지)
@@ -42,6 +42,13 @@ let tab=(()=>{ try{ const t=localStorage.getItem('hong.loan.tab'); return TABS[t
 
 /* ---------- 계산 ---------- */
 const pmt=(r,n,pv)=>pv<=0?0:(r===0?pv/n:pv*r/(1-Math.pow(1+r,-n)));
+// 체증식: 주택금융공사처럼 매달 상환액이 일정 금액씩 늘어요. M = 마지막 달 ÷ 첫 달.
+// (예: 3.6억·30년·연 2.98%면 첫 달 87만 → 마지막 달 238만, M≈2.7)
+function grad(r,n,pv,M){ if(pv<=0) return {first:0,last:0,total:0,y1:0};
+  const c=(Math.max(1,M)-1)/Math.max(1,n-1); let A=0,B=0,v=1;
+  for(let k=0;k<n;k++){ v/=1+r; A+=v; B+=k*v; }
+  const P0=pv/(A+c*B), d=P0*c;
+  return {first:P0,last:P0+(n-1)*d,total:n*(2*P0+(n-1)*d)/2,y1:12*P0+66*d}; }
 function calc(S){
   const b=S.base, c=S.cost, married=b.married==='신혼';
   const income=married?(+b.incG)+(+b.incJ):+b.incG;
@@ -112,7 +119,9 @@ function calc(S){
     const bang=(isB?Q.apt===false:d.bang)?bangOf(Q.region):0;
     const K=+Q.kb||0, base=K?(P?Math.min(P,K):K):P, useKb=K>0&&(!P||K<P);
     const ltvCap=base?Math.max(0,base*(isB?g.ltv:d.ltv)-bang):null;
-    const limit=isB?gLimit:dLimit, per1=isB?gPer1:dPer1, dtiRate=isB?g.dti:d.dti;
+    const isGrad=Q.method==='체증식', M=+Q.gradMult||2.7;
+    // 체증식은 첫해 상환액이 작아서 DTI 한도가 커져요(첫해 원리금으로 심사한다고 봐요)
+    const limit=isB?gLimit:dLimit, per1=isGrad?grad(rate/12,n,1,M).y1:(isB?gPer1:dPer1), dtiRate=isB?g.dti:d.dti;
     const ltvLabel=`${useKb?'KB시세':'집값'}의 ${pct(isB?g.ltv:d.ltv)}${bang?' − 방공제':''}`;
     const Co=S.company, coAmt=+Co.amount||0, coMonthly=coAmt?pmt(Co.rate/12,Math.max(1,Co.years)*12,coAmt):0;
     const C=S.credit, perWon=1/C.years+C.rate, coDsr=Co.dsr?coMonthly*12:0;
@@ -124,10 +133,11 @@ function calc(S){
       const caps=[['상품 한도',limit],['소득 기준(DTI)',dtiCap]]; if(ltvCap!=null) caps.unshift([ltvLabel,ltvCap]);
       const max=ok?Math.max(0,Math.min(...caps.map(c=>c[1]))):0;
       const loan=+Q.borrow>0?Math.min(+Q.borrow,max):max;
-      const r=rate/12; let first,last,interest;
+      const r=rate/12; let first,last,interest,y1;
       if(Q.method==='원금균등'){ const pr=loan/n; first=pr+loan*r; last=pr+pr*r; interest=loan*r*(n+1)/2; }
+      else if(isGrad){ const gr=grad(r,n,loan,M); first=gr.first; last=gr.last; interest=gr.total-loan; y1=gr.y1; }
       else { first=last=pmt(r,n,loan); interest=first*n-loan; }
-      return {caps,max,loan,first,last,interest};
+      return {caps,max,loan,first,last,interest,y1:y1??first*12};
     }
     // 신용대출 DSR = (모든 대출 1년 원리금) ÷ 연소득. 신용대출은 C.years 만기로 나눠 갚는다고 봐요.
     // 보금자리론·디딤돌은 새로 받을 땐 DSR을 안 보지만, 이미 받은 뒤 신용대출을 받으면 DSR에 들어가요.
@@ -137,7 +147,7 @@ function calc(S){
     function solve(creditFirst){
       let m=mortgage(coInt), credit=null;
       for(let i=0;i<4;i++){
-        const byDsr=Math.max(0,(income*C.dsr-(creditFirst?0:m.first*12)-coDsr-b.debt)/perWon);
+        const byDsr=Math.max(0,(income*C.dsr-(creditFirst?0:m.y1)-coDsr-b.debt)/perWon);
         const cMax=Math.max(0,Math.min(byIncome,byDsr));
         const need=P?P+f-m.loan-coAmt:null, left=need==null?null:b.cash-need;
         const cNeed=left!=null&&left<0?-left:0, want=+C.borrow>0?+C.borrow:cNeed, use=Math.min(want,cMax);
@@ -152,11 +162,11 @@ function calc(S){
     const need=P?P+f-m.loan-coAmt:null, left=need==null?null:b.cash-need;
     return {ok,checks,caps:m.caps,max:m.max,loan:m.loan,rate,first:m.first,last:m.last,interest:m.interest,fee:f,bang,need,left,useKb,base,kb:K,
       company:{amount:coAmt,monthly:coMonthly},
-      share:income?(m.first+coMonthly)*12/income:null,
+      share:income?(m.y1+coMonthly*12)/income:null,
       credit:pick.credit, creditAlt:(C.first?later:early).credit,
       // 최종 비율: DTI = (주담대 원리금 + 기존 대출 + 다른 대출 이자) ÷ 소득, DSR = 모든 대출 원리금 ÷ 소득
-      dti:income?(m.first*12+b.debt+coInt+pick.credit.use*C.rate)/income:null, dtiLimit:dtiRate,
-      dsr:income?(m.first*12+b.debt+coMonthly*12+pick.credit.use*perWon)/income:null};
+      dti:income?(m.y1+b.debt+coInt+pick.credit.use*C.rate)/income:null, dtiLimit:dtiRate,
+      dsr:income?(m.y1+b.debt+coMonthly*12+pick.credit.use*perWon)/income:null};
   }
   return {income,gRate,gOk,gMax,gMaxPrice,dRate,dStatus,dMax,dMaxPrice,listing,quick,married,fee};
 }
@@ -350,7 +360,8 @@ function quickView(kind,S,R){
       isB?null:field('만 30세 이상','base.age30','yn'),
       field('대출 기간 (년)','base.term','sel',TERMS),
       isB?field('보금자리론 금리 (우대 전)','bog.rate','pct'):null,
-      field('상환 방식','quick.method','sel',['원리금균등','원금균등']),
+      field('상환 방식','quick.method','sel',['원리금균등','원금균등','체증식']),
+      Q.method==='체증식'?field('체증 배수 (마지막 달 ÷ 첫 달)','quick.gradMult','num'):null,
       field('보유 현금','base.cash','won'),
       isB?field('아파트인가요? (아니면 방공제)','quick.apt','yn'):null,
       !isB||Q.apt===false?field('지역 (방공제)','quick.region','sel',REGIONS):null,
@@ -365,7 +376,7 @@ function quickView(kind,S,R){
   const head=el('div',{class:'lbar'},el('h2',{},'결과'),el('span',{class:'pill '+(q.ok?'good':'bad')},q.ok?'신청 가능':'조건 안 맞음'));
   const result=el('section',{class:'lcard lresult'},head,
     el('div',{class:'lbigs'},
-      big('월 상환액',q.loan?won(q.first):'-',Q.method==='원금균등'&&q.loan?`첫 달 기준 · 마지막 달 ${won(q.last)}`:(q.loan?`${S.base.term}년 동안 매달 같은 금액`:null),'main'),
+      big('월 상환액',q.loan?won(q.first):'-',(Q.method==='원금균등'||Q.method==='체증식')&&q.loan?`첫 달 기준 · 마지막 달 ${won(q.last)}${Q.method==='체증식'?' (매달 조금씩 늘어요, 만 39세 이하)':''}`:(q.loan?`${S.base.term}년 동안 매달 같은 금액`:null),'main'),
       big('대출 금액',q.loan?eok(q.loan):'-',q.max&&+Q.borrow>0&&q.loan<q.max?`최대 ${eok(q.max)}까지 가능`:(q.max?`${q.caps.reduce((a,c)=>c[1]<a[1]?c:a)[0]} 기준`:null)),
       big('적용 금리',pct(q.rate),isB?(married?'신혼 우대 반영':'고정금리'):'소득·기간별 금리 + 우대'),
       big('총 이자',q.loan?eok(q.interest):'-',q.loan?`${S.base.term}년 동안`:null),
@@ -523,7 +534,8 @@ function sheetOptions(S){
     el('div',{class:'lbar'},el('h3',{},'비교 기준 (소득·현금은 위 기본 정보, 나머지는 보금자리론 탭과 같이 바뀌어요)')),
     el('div',{class:'lgrid'},
       field('보금자리론 금리 (우대 전)','bog.rate','pct'),
-      field('상환 방식','quick.method','sel',['원리금균등','원금균등']),
+      field('상환 방식','quick.method','sel',['원리금균등','원금균등','체증식']),
+      Q.method==='체증식'?field('체증 배수 (마지막 달 ÷ 첫 달)','quick.gradMult','num'):null,
       field('아파트인가요? (아니면 방공제)','quick.apt','yn'),
       Q.apt===false?field('지역 (방공제)','quick.region','sel',REGIONS):null,
       field('회사대출 금액','company.amount','won'),
