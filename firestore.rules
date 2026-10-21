@@ -34,7 +34,7 @@ service cloud.firestore {
       allow read: if true;
       allow write: if can('stocks');
     }
-    // 대출계산기(loan), 결혼 비용(wedding-cost)
+    // 대출계산기(loan), 결혼 비용(wedding-cost), 자산관리(asset-status, asset-ledger, asset-goals)
     match /shared/home/pages/{page} {
       allow read, write: if can(page);
     }

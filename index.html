@@ -317,6 +317,43 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .toast button{color:var(--bg);font-weight:600;text-decoration:underline}
 @media (hover:hover){.act{opacity:.35}.row:hover .act,.row:focus-within .act{opacity:1}}
 @media (prefers-reduced-motion:reduce){.tw svg,.side,.nav .grp svg{transition:none}}
+/* 자산관리 */
+.a-people{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:14px}
+.a-four{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:14px}
+@media (max-width:600px){.a-people,.a-four{grid-template-columns:1fr 1fr}}
+.lbig b.plus,.a-amt.plus,.a-num.plus{color:var(--accent)}.lbig b.blue,.a-amt.blue{color:var(--blue)}.a-amt.minus,.a-num.minus,.a-rv.minus{color:var(--danger)}
+.a-track{height:8px;background:var(--line);border-radius:99px;overflow:hidden;min-width:40px}
+.a-fill{height:100%;background:var(--accent);border-radius:99px}.a-fill.neg{background:var(--danger)}
+.a-rows{display:grid;gap:8px}
+.a-row{display:grid;grid-template-columns:minmax(80px,120px) minmax(0,1fr) auto;gap:10px;align-items:center;font-size:.9rem}
+.a-rv{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.85rem;white-space:nowrap}
+.a-bud input{text-align:right}
+.a-two{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}.a-two .lcard{margin:0}
+@media (max-width:860px){.a-two{grid-template-columns:1fr}}
+.a-two{margin-bottom:14px}
+.a-grp{display:grid;gap:2px}.a-grp h3{font-size:.8rem;color:var(--muted);font-weight:600;margin:4px 0 2px}
+.a-item{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;text-align:left;padding:8px;margin:0 -8px;width:calc(100% + 16px);border-radius:8px;color:var(--fg)}
+.a-item:hover{background:var(--bg)}
+.a-in{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;min-width:0}.a-in>span:first-child{overflow-wrap:anywhere}
+.a-in small{flex-basis:100%;color:var(--muted);font-size:.8rem}
+.a-who{font-size:.72rem;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:0 7px}
+.a-amt{font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.a-form{border:1px solid var(--accent);border-radius:12px;padding:12px;display:grid;gap:10px;margin:4px 0}
+.a-entry{display:grid;gap:12px}
+.a-check{display:flex;gap:8px;align-items:center;font-size:.85rem;color:var(--muted)}
+.a-check input{width:18px;height:18px;accent-color:var(--accent)}
+.a-month{display:flex;align-items:center;gap:4px}.a-month b{font-variant-numeric:tabular-nums;white-space:nowrap;text-align:center;padding-inline:4px}
+.a-month .ib{font-size:1.4rem;line-height:1}.a-month .chip{white-space:nowrap}
+.a-goal .ldl dt{white-space:nowrap}
+.ltable.a-who-t{min-width:0;width:100%}
+.a-lq{margin-bottom:14px}.a-stack{display:grid;gap:14px}.a-stack .lcard{margin:0}
+.a-num{text-align:right!important;white-space:nowrap}
+.a-hist td{vertical-align:middle}.a-bcell{width:30%;min-width:60px}
+.a-goals{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:14px}.a-goals .lcard{margin:0}
+.a-gprog{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center}.a-gprog b{font-size:1.3rem;font-variant-numeric:tabular-nums;color:var(--accent)}
+.a-goal.done{border-color:var(--accent)}
+.a-qadd{display:flex;gap:8px;align-items:center}.a-qadd .lin{flex:1}
+.lin input[type=date],.lin input[type=month]{min-height:38px}
 </style>
 
 </head>
@@ -408,14 +445,15 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=20261016a"></script>
-<script src="aptprice.js?v=20261016a"></script>
-<script src="loan.js?v=20261016a"></script>
-<script src="wedding.js?v=20261016a"></script>
-<script src="realty.js?v=20261016a"></script>
-<script src="imjang.js?v=20261016a"></script>
-<script src="stocks.js?v=20261016a"></script>
-<script src="admin.js?v=20261016a"></script>
+<script src="firebase-config.js?v=20261021a"></script>
+<script src="aptprice.js?v=20261021a"></script>
+<script src="loan.js?v=20261021a"></script>
+<script src="wedding.js?v=20261021a"></script>
+<script src="realty.js?v=20261021a"></script>
+<script src="imjang.js?v=20261021a"></script>
+<script src="asset.js?v=20261021a"></script>
+<script src="stocks.js?v=20261021a"></script>
+<script src="admin.js?v=20261021a"></script>
 <script>
 const ICON = {
   chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -440,6 +478,11 @@ const MENU=[
     {key:'wedding-check', label:'준비 체크', title:'결혼 준비 체크', seed:'check'},
     {key:'wedding-dday', label:'전날 준비물', title:'결혼식 전날 준비물', seed:'dday'},
     {key:'wedding-cost', label:'비용 정리', view:'weddingCost'},
+  ]},
+  {label:'자산관리', children:[
+    {key:'asset-status', label:'자산 현황', view:'assetStatus'},
+    {key:'asset-ledger', label:'가계부', view:'assetLedger'},
+    {key:'asset-goals', label:'공동 목표', view:'assetGoals'},
   ]},
   {label:'주식', children:[
     {key:'stocks', label:'관심 뉴스', view:'stocks'},
