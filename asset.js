@@ -66,8 +66,8 @@ function store(doc,lsKey,fresh,ok){
     },e=>S.status(e&&e.code==='permission-denied'?'이 계정은 볼 권한이 없어요':'동기화 끊김 · 새로고침해 주세요',true));
   };
   S.view=(onOpen)=>({
-    open(c){ S.root=c; if(!S.state) S.load(); onOpen&&onOpen(); S.render(); S.sync(); },
-    close(){ if(S.unsub){ S.unsub(); S.unsub=null; } if(S.pending) S.flush(); S.root=null; },
+    open(c){ S.root=c; document.body.classList.add('asset-theme'); if(!S.state) S.load(); onOpen&&onOpen(); S.render(); S.sync(); },
+    close(){ if(S.unsub){ S.unsub(); S.unsub=null; } if(S.pending) S.flush(); S.root=null; document.body.classList.remove('asset-theme'); },
     sync(){ if(S.root) S.sync(); },
   });
   return S;
@@ -108,7 +108,7 @@ st.render=()=>{
       items.length?null:el('p',{class:'lnote'},kind==='asset'?'통장, 적금, 주식 계좌, 전세 보증금처럼 가진 것을 적어 주세요.':'대출, 카드 할부처럼 갚아야 할 돈을 적어 주세요.'),
       ...groups.map(g=>el('div',{class:'a-grp'},g.c?el('h3',{},g.c):null,
         ...g.items.map(i=>i.id===stEdit?stForm(i):el('button',{class:'a-item',type:'button',onclick:()=>{ stEdit=i.id; st.render(); }},
-          el('span',{class:'a-in'},el('span',{},i.name||'(이름 없음)'),el('span',{class:'a-who'},i.owner),i.memo?el('small',{},i.memo):null),
+          el('span',{class:'a-in'},el('span',{},i.name||'(이름 없음)'),el('span',{class:'a-who','data-who':i.owner},i.owner),i.memo?el('small',{},i.memo):null),
           el('span',{class:'a-amt'+(kind==='debt'?' minus':'')},won(i.amount)))))),
       el('button',{class:'chip',type:'button',onclick:()=>{ const i={id:nid(),kind,cat:CATS[kind][0],name:'',owner:PEOPLE[0],amount:0,memo:'',isNew:true}; s.items.push(i); stEdit=i.id; st.render(); }},`${KIND[kind]} 추가`));
   });
@@ -234,7 +234,7 @@ lg.render=()=>{
     M.length?null:el('p',{class:'lnote'},'아직 적은 내역이 없어요.'),
     ...Object.keys(days).map(dt=>el('div',{class:'a-grp'},el('h3',{},`${+dt.slice(5,7)}월 ${+dt.slice(8,10)}일 (${'일월화수목금토'[new Date(dt+'T00:00').getDay()]})`),
       ...days[dt].map(e=>e.id===lgEdit?editEntry(e):el('button',{class:'a-item',type:'button',onclick:()=>{ lgEdit=e.id; lg.render(); }},
-        el('span',{class:'a-in'},el('span',{},e.memo||e.cat),el('span',{class:'a-who'},e.who),
+        el('span',{class:'a-in'},el('span',{},e.memo||e.cat),el('span',{class:'a-who','data-who':e.who},e.who),
           el('small',{},`${TYPES[e.type]} · ${e.cat}${e.fixed?' · 고정':''}`)),
         el('span',{class:'a-amt '+(e.type==='in'?'plus':e.type==='save'?'blue':'')},(e.type==='in'?'+':e.type==='out'?'−':'')+won(e.amount)))))));
   R.replaceChildren(header(lg,'가계부',`수입 ${eok(inc)} · 지출 ${eok(out)} · 저축 ${eok(sav)}`,nav),

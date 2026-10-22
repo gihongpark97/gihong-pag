@@ -320,7 +320,7 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 /* 자산관리 */
 .a-people{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:14px}
 .a-four{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:14px}
-@media (max-width:600px){.a-people,.a-four{grid-template-columns:1fr 1fr}}
+@media (max-width:600px){.a-people,.a-four{grid-template-columns:1fr 1fr}.a-people .lbig:last-child,.a-four .lbig:last-child{grid-column:1/-1}}
 .lbig b.plus,.a-amt.plus,.a-num.plus{color:var(--accent)}.lbig b.blue,.a-amt.blue{color:var(--blue)}.a-amt.minus,.a-num.minus,.a-rv.minus{color:var(--danger)}
 .a-track{height:8px;background:var(--line);border-radius:99px;overflow:hidden;min-width:40px}
 .a-fill{height:100%;background:var(--accent);border-radius:99px}.a-fill.neg{background:var(--danger)}
@@ -354,6 +354,36 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .a-goal.done{border-color:var(--accent)}
 .a-qadd{display:flex;gap:8px;align-items:center}.a-qadd .lin{flex:1}
 .lin input[type=date],.lin input[type=month]{min-height:38px}
+/* 자산관리 화면 테마: 따뜻한 가계부 노트 (자산관리 메뉴를 열면 body에 asset-theme가 붙어요) */
+body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--line:#ece2d0;--accent:#d9733b;--accent-soft:#fbe9dc;--blue:#4f7fe0;--danger:#d64545;
+  --a-main:#fff3e6;--a-main-line:#f3d2b8;--a-g:#e3edff;--a-g-fg:#3f6fd8;--a-j:#ffe6ef;--a-j-fg:#d24f86;--a-k:#e4f5e6;--a-k-fg:#3f9a55;--a-track:#f1e9db;--a-tag:#f3ebdc;
+  --a-c1:#f2a65a;--a-c2:#7fb7e8;--a-c3:#e89ab8;--a-c4:#8fcf9b;--a-c5:#c5a3e6}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) body.asset-theme{--bg:#1b1713;--surface:#24201a;--fg:#efe6da;--muted:#a8998a;--line:#3a3229;--accent:#f0a06a;--accent-soft:#3a2a1e;--blue:#8fb3ff;--danger:#f08a7a;
+  --a-main:#33261b;--a-main-line:#5a3f2a;--a-g:#1f2a3d;--a-g-fg:#9dbcff;--a-j:#3a2230;--a-j-fg:#f39ac0;--a-k:#1f3326;--a-k-fg:#8ad69d;--a-track:#3a3229;--a-tag:#332c24;color-scheme:dark}}
+:root[data-theme="dark"] body.asset-theme{--bg:#1b1713;--surface:#24201a;--fg:#efe6da;--muted:#a8998a;--line:#3a3229;--accent:#f0a06a;--accent-soft:#3a2a1e;--blue:#8fb3ff;--danger:#f08a7a;
+  --a-main:#33261b;--a-main-line:#5a3f2a;--a-g:#1f2a3d;--a-g-fg:#9dbcff;--a-j:#3a2230;--a-j-fg:#f39ac0;--a-k:#1f3326;--a-k-fg:#8ad69d;--a-track:#3a3229;--a-tag:#332c24;color-scheme:dark}
+.asset-theme .brand,.asset-theme #loanview h1,.asset-theme #loanview .lcard h2{font-family:var(--font-display)}
+.asset-theme #loanview h1{font-size:2rem}
+.asset-theme #loanview .lcard h2{font-size:1.15rem}
+.asset-theme #loanview .lcard{border-radius:22px;border-width:1.5px;box-shadow:0 3px 0 var(--line)}
+.asset-theme #loanview .lbig{border-radius:20px;border:1.5px solid transparent}
+.asset-theme #loanview .lbig b{font-family:var(--font-display)}
+.asset-theme #loanview .lbig.main{background:var(--a-main);border-color:var(--a-main-line)}
+.asset-theme #loanview .lbig.main b{color:var(--accent);font-size:2.2rem}
+.asset-theme .a-people .lbig:nth-child(2){background:var(--a-g)}.asset-theme .a-people .lbig:nth-child(2) b{color:var(--a-g-fg)}
+.asset-theme .a-people .lbig:nth-child(3){background:var(--a-j)}.asset-theme .a-people .lbig:nth-child(3) b{color:var(--a-j-fg)}
+.asset-theme .a-people .lbig:nth-child(4){background:var(--a-k)}.asset-theme .a-people .lbig:nth-child(4) b{color:var(--a-k-fg)}
+.asset-theme .a-four .lbig:nth-child(2){background:var(--a-k)}.asset-theme .a-four .lbig:nth-child(3){background:var(--a-j)}.asset-theme .a-four .lbig:nth-child(4){background:var(--a-g)}
+.asset-theme .a-track{height:12px;background:var(--a-track)}
+.asset-theme .a-rows .a-row:nth-child(5n+1) .a-fill{background:var(--a-c1)}.asset-theme .a-rows .a-row:nth-child(5n+2) .a-fill{background:var(--a-c2)}
+.asset-theme .a-rows .a-row:nth-child(5n+3) .a-fill{background:var(--a-c3)}.asset-theme .a-rows .a-row:nth-child(5n+4) .a-fill{background:var(--a-c4)}
+.asset-theme .a-rows .a-row:nth-child(5n) .a-fill{background:var(--a-c5)}
+.asset-theme .a-fill.neg{background:var(--danger)!important}
+.asset-theme #loanview .btn{border-radius:999px;color:#fff}
+.asset-theme #loanview .chip{border-width:1.5px;background:var(--surface)}
+.asset-theme #loanview .chip[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.asset-theme .a-who{border:0;background:var(--a-tag)}
+.asset-theme .a-who[data-who="기홍"]{background:var(--a-g);color:var(--a-g-fg)}.asset-theme .a-who[data-who="지연"]{background:var(--a-j);color:var(--a-j-fg)}.asset-theme .a-who[data-who="공동"]{background:var(--a-k);color:var(--a-k-fg)}
 </style>
 
 </head>
@@ -445,15 +475,15 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=20261021a"></script>
-<script src="aptprice.js?v=20261021a"></script>
-<script src="loan.js?v=20261021a"></script>
-<script src="wedding.js?v=20261021a"></script>
-<script src="realty.js?v=20261021a"></script>
-<script src="imjang.js?v=20261021a"></script>
-<script src="asset.js?v=20261021a"></script>
-<script src="stocks.js?v=20261021a"></script>
-<script src="admin.js?v=20261021a"></script>
+<script src="firebase-config.js?v=20261022a"></script>
+<script src="aptprice.js?v=20261022a"></script>
+<script src="loan.js?v=20261022a"></script>
+<script src="wedding.js?v=20261022a"></script>
+<script src="realty.js?v=20261022a"></script>
+<script src="imjang.js?v=20261022a"></script>
+<script src="asset.js?v=20261022a"></script>
+<script src="stocks.js?v=20261022a"></script>
+<script src="admin.js?v=20261022a"></script>
 <script>
 const ICON = {
   chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
