@@ -354,6 +354,31 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .a-goal.done{border-color:var(--accent)}
 .a-qadd{display:flex;gap:8px;align-items:center}.a-qadd .lin{flex:1}
 .lin input[type=date],.lin input[type=month]{min-height:38px}
+/* 신혼 가전: 가전마다 후보(브랜드·가격)를 비교하고 하나를 골라요 */
+.ap-filter{margin-bottom:14px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.ap-filter .chip{flex:none}
+.ap-filter .chip[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+.ap-main{display:grid;gap:2px;min-width:0}
+.ap-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ap-st{font-size:.72rem;border-radius:999px;padding:1px 8px;background:var(--bg);color:var(--muted);border:1px solid var(--line);white-space:nowrap}
+.ap-st[data-st="결정"]{background:var(--blue-soft);color:var(--blue);border-color:transparent}
+.ap-st[data-st="구매 완료"]{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.ap-sub{font-size:.85rem;color:var(--muted);overflow-wrap:anywhere}.ap-sub.on{color:var(--fg)}
+.ap-memo{font-size:.8rem;color:var(--muted);white-space:pre-line;padding-bottom:2px}
+.ap-over{color:var(--danger)}
+.ap-fields{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:8px}
+.ap-opts{display:grid;gap:8px}
+.ap-opt{border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:grid;gap:6px;background:var(--bg)}
+.ap-opt.on{border-color:var(--accent);background:var(--accent-soft)}
+.ap-ohead{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.ap-pick{display:flex;align-items:center;gap:6px;font-size:.85rem;font-weight:600;cursor:pointer}
+.ap-pick input{accent-color:var(--accent);width:18px;height:18px;margin:0}
+.ap-opt.on .ap-pick{color:var(--accent)}
+.ap-ogrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.ap-ogrid .wide{grid-column:span 2}
+.ap-ogrid input{font:inherit;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px;min-width:0;width:100%}
+.ap-link{font-size:.8rem;color:var(--accent)}
+.wtiles .lin input{font:inherit;font-size:.9rem;padding:6px 8px}
+@media (max-width:640px){.ap-ogrid{grid-template-columns:1fr 1fr}.ap-fields{grid-template-columns:1fr 1fr}.ap-fields .lfield:first-child{grid-column:1/-1}}
 /* 자산관리 화면 테마: 따뜻한 가계부 노트 (자산관리 메뉴를 열면 body에 asset-theme가 붙어요) */
 body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--line:#ece2d0;--accent:#d9733b;--accent-soft:#fbe9dc;--blue:#4f7fe0;--danger:#d64545;
   --a-main:#fff3e6;--a-main-line:#f3d2b8;--a-g:#e3edff;--a-g-fg:#3f6fd8;--a-j:#ffe6ef;--a-j-fg:#d24f86;--a-k:#e4f5e6;--a-k-fg:#3f9a55;--a-track:#f1e9db;--a-tag:#f3ebdc;
@@ -475,15 +500,16 @@ body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--l
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=20261022a"></script>
-<script src="aptprice.js?v=20261022a"></script>
-<script src="loan.js?v=20261022a"></script>
-<script src="wedding.js?v=20261022a"></script>
-<script src="realty.js?v=20261022a"></script>
-<script src="imjang.js?v=20261022a"></script>
-<script src="asset.js?v=20261022a"></script>
-<script src="stocks.js?v=20261022a"></script>
-<script src="admin.js?v=20261022a"></script>
+<script src="firebase-config.js?v=20261025a"></script>
+<script src="aptprice.js?v=20261025a"></script>
+<script src="loan.js?v=20261025a"></script>
+<script src="wedding.js?v=20261025a"></script>
+<script src="realty.js?v=20261025a"></script>
+<script src="imjang.js?v=20261025a"></script>
+<script src="asset.js?v=20261025a"></script>
+<script src="appliance.js?v=20261025a"></script>
+<script src="stocks.js?v=20261025a"></script>
+<script src="admin.js?v=20261025a"></script>
 <script>
 const ICON = {
   chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -513,6 +539,9 @@ const MENU=[
     {key:'asset-status', label:'자산 현황', view:'assetStatus'},
     {key:'asset-ledger', label:'가계부', view:'assetLedger'},
     {key:'asset-goals', label:'공동 목표', view:'assetGoals'},
+  ]},
+  {label:'신혼 가전', children:[
+    {key:'appliances', label:'가전 리스트', title:'신혼 가전 리스트', view:'appliances'},
   ]},
   {label:'주식', children:[
     {key:'stocks', label:'관심 뉴스', view:'stocks'},
