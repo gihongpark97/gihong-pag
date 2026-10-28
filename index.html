@@ -263,6 +263,13 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .ltablewrap{overflow-x:auto}
 .ltable{border-collapse:collapse;font-size:.85rem;min-width:420px}
 .ltable th,.ltable td{border-bottom:1px solid var(--line);padding:6px;text-align:left;font-variant-numeric:tabular-nums}
+.lsched{margin-top:16px}
+.lschedwrap{max-height:70vh;overflow:auto}
+.lsched .ltable{width:100%;min-width:560px}
+.lsched .ltable th{position:sticky;top:0;background:var(--surface);z-index:1}
+.lsched .ltable td:nth-child(n+3),.lsched .ltable th:nth-child(n+3){text-align:right}
+.lsched .lsum td:not(:first-child){text-align:right}
+.lsched .lsum td{font-weight:700;background:var(--soft,rgba(127,127,127,.08))}
 .lsheet{display:grid;gap:8px;margin-bottom:18px}
 .lsheett{font-size:.8rem;min-width:1400px}
 .lsheett th{position:sticky;top:0;background:var(--surface);white-space:nowrap;font-weight:600;border-bottom:2px solid var(--line)}
@@ -500,16 +507,16 @@ body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--l
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=20261025a"></script>
-<script src="aptprice.js?v=20261025a"></script>
-<script src="loan.js?v=20261025a"></script>
-<script src="wedding.js?v=20261025a"></script>
-<script src="realty.js?v=20261025a"></script>
-<script src="imjang.js?v=20261025a"></script>
-<script src="asset.js?v=20261025a"></script>
-<script src="appliance.js?v=20261025a"></script>
-<script src="stocks.js?v=20261025a"></script>
-<script src="admin.js?v=20261025a"></script>
+<script src="firebase-config.js?v=20261028a"></script>
+<script src="aptprice.js?v=20261028a"></script>
+<script src="loan.js?v=20261028a"></script>
+<script src="wedding.js?v=20261028a"></script>
+<script src="realty.js?v=20261028a"></script>
+<script src="imjang.js?v=20261028a"></script>
+<script src="asset.js?v=20261028a"></script>
+<script src="appliance.js?v=20261028a"></script>
+<script src="stocks.js?v=20261028a"></script>
+<script src="admin.js?v=20261028a"></script>
 <script>
 const ICON = {
   chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',

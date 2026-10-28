@@ -405,8 +405,40 @@ function quickView(kind,S,R){
     `같은 조건으로 ${isB?'디딤돌':'보금자리론'}은 `,
     other.ok&&other.loan?el('b',{},`월 ${won(other.first)} (대출 ${eok(other.loan)}, 금리 ${pct(other.rate)})`):el('b',{},'조건이 안 맞아요'),
     ' · ',el('button',{class:'linkbtn',type:'button',onclick:()=>{ tab=isB?'did':'bog'; try{ localStorage.setItem('hong.loan.tab',tab); }catch(e){} render(); }},`${isB?'디딤돌':'보금자리론'} 보기`));
-  return el('div',{class:'lquick'},inputs,el('div',{},result,cmp,
-    el('p',{class:'lnote'},'금리·한도는 2026년 9월 30일 기준이에요. 상품 조건은 "매물 비교" 탭에서 고칠 수 있어요. 신청 전에 꼭 기금e든든·주택금융공사에서 다시 확인하세요.')));
+  return el('div',{},el('div',{class:'lquick'},inputs,el('div',{},result,cmp,
+    el('p',{class:'lnote'},'금리·한도는 2026년 9월 30일 기준이에요. 상품 조건은 "매물 비교" 탭에서 고칠 수 있어요. 신청 전에 꼭 기금e든든·주택금융공사에서 다시 확인하세요.'))),
+    scheduleBox(S,q));
+}
+// 월별 상환표: 회차마다 납입액·원금·이자·남은 잔액. 해마다 합계 줄을 넣어요.
+function schedule(loan,rate,n,method,M){
+  const r=rate/12, rows=[]; let bal=loan;
+  const level=pmt(r,n,loan), gr=method==='체증식'?grad(r,n,loan,M):null, step=gr&&n>1?(gr.last-gr.first)/(n-1):0;
+  for(let k=0;k<n;k++){
+    const int=bal*r;
+    let pay=method==='원금균등'?loan/n+int:gr?gr.first+k*step:level, prin=pay-int;
+    if(k===n-1){ prin=bal; pay=prin+int; }
+    bal=Math.max(0,bal-prin);
+    rows.push({no:k+1,pay,prin,int,bal});
+  }
+  return rows;
+}
+function scheduleBox(S,q){
+  if(!q.loan) return null;
+  const n=S.base.term*12, rows=schedule(q.loan,q.rate,n,S.quick.method,+S.quick.gradMult||2.7);
+  const body=[], sum=a=>a.reduce((t,x)=>t+x,0);
+  for(let y=0;y<S.base.term;y++){
+    const ys=rows.slice(y*12,y*12+12);
+    ys.forEach((x,i)=>body.push(el('tr',{},el('td',{},`${x.no}회`),el('td',{},`${y+1}년차 ${i+1}개월`),
+      el('td',{},won(x.pay)),el('td',{},won(x.prin)),el('td',{},won(x.int)),el('td',{},won(x.bal)))));
+    body.push(el('tr',{class:'lsum'},el('td',{colspan:2},`${y+1}년차 합계`),
+      el('td',{},won(sum(ys.map(x=>x.pay)))),el('td',{},won(sum(ys.map(x=>x.prin)))),el('td',{},won(sum(ys.map(x=>x.int)))),el('td',{},won(ys[ys.length-1].bal))));
+  }
+  return el('section',{class:'lcard lsched'},
+    el('div',{class:'lbar'},el('h2',{},'월별 상환표'),el('span',{class:'lsub'},`${S.quick.method} · ${S.base.term}년 · ${n}회 · 총 ${eok(sum(rows.map(x=>x.pay)))}`)),
+    el('div',{class:'ltablewrap lschedwrap'},el('table',{class:'ltable'},
+      el('thead',{},el('tr',{},...['회차','시기','월 납입액','원금','이자','남은 잔액'].map(t=>el('th',{},t)))),
+      el('tbody',{},...body))),
+    el('p',{class:'lnote'},`주담대 ${eok(q.loan)}, 금리 ${pct(q.rate)} 기준이에요. 회사대출·신용대출은 빠져 있어요. 원 단위는 반올림이라 은행 상환표와 몇 원 다를 수 있어요.${S.quick.method==='체증식'?' 체증식은 초반 납입액이 이자보다 적으면 원금이 음수로 나오고 잔액이 잠깐 늘어요.':''}`));
 }
 function creditBox(S,q){
   const c=q.credit, C=S.credit;
