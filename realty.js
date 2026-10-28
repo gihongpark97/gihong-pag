@@ -1,4 +1,4 @@
-/* 부동산 > 입지 체크리스트: 임장 다녀온 매물마다 항목별 1~5점 → 가중치 반영 100점 환산.
+/* 부동산 > 입지 체크리스트: 위쪽 카드에서 매물을 고르고 항목마다 1~5점을 탭 → 가중치 반영 100점 환산. 여러 매물은 순위 카드와 비교표로 봐요.
    예산·대출 조건은 점수가 아니라 통과 여부로 따로 봐요.
    저장 위치: Firestore shared/home/pages/realty-check = {list:[{name,price,hh,walk,g:{},s:{}}], updatedAt}
    로그인 없이 쓰면 이 기기(localStorage 'hong.realty')에만 저장돼요. 원본: 홍이 님이 준 "매물 입지 체크리스트.html" */
@@ -67,66 +67,106 @@ function sync(){
     const d=snap.exists?snap.data():null;
     if(d&&Array.isArray(d.list)&&d.list.length){ state={list:d.list}; try{ localStorage.setItem(LS,JSON.stringify(state)); }catch(e){} }
     else if(!snap.metadata.fromCache){ pending=true; flush(); }   // 처음: 이 기기 내용을 올려요
-    if(root&&!root.contains(document.activeElement)) render();
+    if(root){ if(!root.contains(document.activeElement)) render(); else update(); }
     setStatus('모든 기기에 저장됨');
   },e=>setStatus(e&&e.code==='permission-denied'?'이 계정은 볼 권한이 없어요':'동기화 끊김 · 새로고침해 주세요',true));
 }
 
-function score(l){let sum=0,max=0;FLAT.forEach(f=>{const v=+l.s[f.id];if(v){sum+=v*f.w;max+=5*f.w}});return max?Math.round(sum/max*100):null;}
+function score(l){let sum=0,max=0;FLAT.forEach(f=>{const v=+(l.s||{})[f.id];if(v){sum+=v*f.w;max+=5*f.w}});return max?Math.round(sum/max*100):null;}
+function filled(l){return FLAT.filter(f=>+(l.s||{})[f.id]).length;}
+function catAvg(l,ci){const v=CATS[ci].items.map((_,ii)=>+(l.s||{})[ci+"_"+ii]).filter(Boolean);return v.length?(v.reduce((a,b)=>a+b,0)/v.length).toFixed(1):null;}
+function gates(l){return GATES.filter(([k])=>(l.g||{})[k]).length;}
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 const $=id=>root.querySelector('#'+id);
+const LABEL={5:"매우 좋음",4:"좋음",3:"보통",2:"아쉬움",1:"나쁨"};
+// 기본 정보에서 바로 점수를 추천해요 (항목이 비어 있을 때만 버튼으로 보여요)
+const SUGGEST={"0_0":l=>{const v=+l.walk;if(l.walk===""||l.walk==null||!(v>0))return null;return v<=5?5:v<=10?4:v<=15?3:v<=20?2:1},
+               "3_0":l=>{const v=+l.hh;if(l.hh===""||l.hh==null||!(v>0))return null;return v>=1000?5:v>=500?4:v>=300?3:v>=150?2:1}};
+const BASIC=[["price","매매가","억",v=>+v<=6?['ok','예산 안']:['no','6억 초과']],
+  ["hh","세대수","",v=>+v>=300?['ok','300세대 이상']:['no','300 미만']],
+  ["walk","역까지 도보","분",v=>+v<=10?['ok','역세권']:['no','10분 초과']]];
+let cur=0;
 
 function render(){
  if(!root||!state) return;
- const L=state.list;
- const best=L.map((l,i)=>({i,s:score(l)})).filter(x=>x.s!=null).sort((a,b)=>b.s-a.s)[0];
- let h=`<div class="lhead"><div><div class="crumb">부동산</div><h1>매물 입지 체크리스트</h1>
-  <div class="sum">임장 다녀온 매물마다 항목별로 1~5점을 매기면 가중치를 반영한 100점 환산 점수가 나와요. 예산·대출 조건은 점수가 아니라 통과 여부로 따로 봐요.</div></div>
+ if(cur>=state.list.length) cur=state.list.length-1;
+ const l=state.list[cur];
+ let h=`<div class="rc"><div class="lhead"><div><div class="crumb">부동산</div><h1>매물 입지 체크리스트</h1>
+  <div class="sum">매물을 골라 항목마다 1~5점을 탭하면 가중치를 반영한 100점 점수가 나와요. 예산·대출 조건은 점수와 따로 통과 여부만 봐요.</div></div>
   <div class="acct"><div class="sync" id="rcsync"></div></div></div>
-  <div class="rc-how"><span><b>5점</b> 매우 좋음</span><span><b>3점</b> 보통</span><span><b>1점</b> 나쁨</span><span><b>×3 / ×2 / ×1</b> 항목 가중치</span>${best&&L.length>1?`<span>지금 1등: <b>${esc(L[best.i].name)}</b> ${best.s}점</span>`:''}</div>
-  <div class="rc-tools"><button class="btn" type="button" id="rcadd">+ 매물 추가</button><button class="chip" type="button" id="rcclear">전체 초기화</button></div>
-  <div class="rc-scroll"><table class="rc-t"><thead><tr><th class="rc-item">항목</th>`;
- L.forEach((l,i)=>{h+=`<th class="rc-col"><div class="rc-colhead">${l.ex?'<span class="rc-ex">예시</span>':''}
-  <input type="text" id="rc-name-${i}" data-i="${i}" data-k="name" value="${esc(l.name)}" aria-label="매물 이름">
-  <button class="chip del rc-rm" type="button" data-rm="${i}">삭제</button></div></th>`});
- h+="</tr></thead><tbody>";
- h+=`<tr class="rc-cat"><td class="rc-item"><span class="rc-chip" style="--c:var(--rc-l6)"><i></i>기본 정보</span></td>${L.map(()=>"<td></td>").join("")}</tr>`;
- const basic=[["price","매매가 (억)","6억 이하인지 자동 표시",v=>v===""?"":(+v<=6?'<span class="rc-flag ok">예산 안</span>':'<span class="rc-flag no">6억 초과</span>')],
-  ["hh","세대수","300세대 이상인지 자동 표시",v=>v===""?"":(+v>=300?'<span class="rc-flag ok">300+</span>':'<span class="rc-flag no">300 미만</span>')],
-  ["walk","역까지 도보 (분)","동 출입구에서 개찰구까지",v=>v===""?"":(+v<=10?'<span class="rc-flag ok">역세권</span>':'<span class="rc-flag no">10분 초과</span>')]];
- basic.forEach(([k,n,hint,fl])=>{h+=`<tr><td class="rc-item"><div class="rc-name">${n}</div><div class="rc-hint">${hint}</div></td>`;
-  L.forEach((l,i)=>h+=`<td class="rc-col"><input type="number" step="any" inputmode="decimal" id="rc-${k}-${i}" data-i="${i}" data-k="${k}" value="${esc(l[k])}"><div id="rc-fl-${k}-${i}">${fl(l[k]??"")}</div></td>`);h+="</tr>"});
- CATS.forEach((c,ci)=>{h+=`<tr class="rc-cat"><td class="rc-item"><span class="rc-chip" style="--c:var(--rc${c.c.slice(1)})"><i></i>${c.name}</span><span class="rc-w">×${c.w}</span></td>${L.map(()=>"<td></td>").join("")}</tr>`;
-  c.items.forEach(([n,hint],ii)=>{const id=ci+"_"+ii;h+=`<tr><td class="rc-item"><div class="rc-name">${n}</div><div class="rc-hint">${hint}</div></td>`;
-   L.forEach((l,i)=>{const v=(l.s||{})[id]||"";h+=`<td class="rc-col"><select id="rc-s-${id}-${i}" data-i="${i}" data-s="${id}" aria-label="${n} 점수"><option value="">–</option>${[5,4,3,2,1].map(x=>`<option ${+v===x?"selected":""}>${x}</option>`).join("")}</select></td>`});h+="</tr>"})});
- h+=`<tr class="rc-cat"><td class="rc-item"><span class="rc-chip" style="--c:var(--danger)"><i></i>예산·대출 통과 조건</span></td>${L.map(()=>"<td></td>").join("")}</tr>`;
- GATES.forEach(([k,n])=>{h+=`<tr><td class="rc-item"><div class="rc-name">${n}</div>${k==='kb'?'<div class="rc-hint"><a href="#loan">대출계산기에서 확인 →</a></div>':''}</td>`;
-  L.forEach((l,i)=>h+=`<td class="rc-col"><label class="rc-cb"><input type="checkbox" id="rc-g-${k}-${i}" data-i="${i}" data-g="${k}" ${(l.g||{})[k]?"checked":""}>확인</label></td>`);h+="</tr>"});
- h+="</tbody><tfoot><tr><td class='rc-item'><div class='rc-name'>입지 점수</div><div class='rc-hint'>입력한 항목만으로 100점 환산</div></td>";
- L.forEach((l,i)=>h+=`<td class="rc-col" id="rc-tot-${i}"></td>`);h+="</tr></tfoot></table></div>";
- h+=`<div class="rc-guide">
+  <div class="rc-rank" id="rc-rank" role="tablist" aria-label="매물"></div>
+  <section class="lcard rc-ed" aria-label="선택한 매물">
+   <div class="rc-edh">${l.ex?'<span class="rc-ex">예시</span>':''}<input type="text" class="rc-nm" id="rc-name" data-k="name" value="${esc(l.name)}" aria-label="매물 이름" placeholder="단지 이름">
+    <button class="chip del" type="button" id="rc-rm">삭제</button></div>
+   <div class="rc-basic">${BASIC.map(([k,n,u])=>`<label class="rc-bf"><span>${n}${u?` (${u})`:""}</span><div class="rc-bin"><input type="number" step="any" inputmode="decimal" id="rc-${k}" data-k="${k}" value="${esc(l[k])}"></div><div id="rc-fl-${k}"></div></label>`).join('')}</div>
+  </section>
+  <div class="rc-sticky"><div class="rc-sc"><b id="rc-score">–</b><small>/ 100</small></div><div class="rc-sbar"><span id="rc-sbar"></span></div><div class="rc-sinfo" id="rc-sinfo"></div></div>
+  <div class="rc-how"><span><b>5</b> 매우 좋음</span><span><b>3</b> 보통</span><span><b>1</b> 나쁨</span><span>같은 점수를 한 번 더 누르면 지워져요</span></div>
+  <div class="rc-cats" id="rc-cats">`;
+ CATS.forEach((c,ci)=>{h+=`<section class="rc-cat" style="--c:var(--rc${c.c.slice(1)})"><div class="rc-cath"><span class="rc-chip"><i></i>${c.name}</span><span class="rc-w">가중치 ×${c.w}</span><span class="rc-avg" id="rc-avg-${ci}"></span></div>`;
+  c.items.forEach(([n,hint],ii)=>{const id=ci+"_"+ii;
+   h+=`<div class="rc-row"><div class="rc-q"><div class="rc-name">${n}</div><div class="rc-hint">${hint}</div><div class="rc-sug" id="rc-sug-${id}"></div></div>
+    <div class="rc-pick" role="radiogroup" aria-label="${n} 점수">${[1,2,3,4,5].map(x=>`<button type="button" role="radio" data-s="${id}" data-v="${x}" title="${LABEL[x]}">${x}</button>`).join('')}</div></div>`});
+  h+=`</section>`});
+ h+=`<section class="rc-cat rc-gatebox" style="--c:var(--danger)"><div class="rc-cath"><span class="rc-chip"><i></i>예산·대출 통과 조건</span><span class="rc-avg" id="rc-gcount"></span></div>
+  ${GATES.map(([k,n])=>`<label class="rc-gate"><input type="checkbox" id="rc-g-${k}" data-g="${k}"><span>${n}${k==='kb'?' <a href="#loan">대출계산기 →</a>':''}</span></label>`).join('')}</section></div>
+  <details class="rc-cmpbox"${L().length>1?'':' hidden'}><summary>항목별로 나란히 비교</summary><div class="rc-scroll" id="rc-cmp"></div></details>
+  <div class="rc-guide">
   <section class="lcard"><h3>출퇴근은 실측으로</h3><p>지도 앱 시간 대신 평일 오전 8시대에 직접 타보세요. 서울역·합정 각각 문 앞에서 사무실까지 걸린 시간을 적습니다.</p></section>
   <section class="lcard"><h3>역세권 기준</h3><p>보통 도보 10분(약 500~800m) 이내를 역세권으로 봅니다. 단지 정문이 아니라 내 동에서 개찰구까지 재는 게 정확합니다.</p></section>
   <section class="lcard"><h3>호재는 단계를 확인</h3><p>신설역·GTX 같은 계획은 예타 통과, 착공, 개통 중 어디까지 왔는지에 따라 무게가 크게 다릅니다. 착공 전 계획은 점수를 보수적으로 주세요.</p></section>
-  <section class="lcard"><h3>대출은 시세 기준</h3><p>보금자리론 가격 상한은 매매가가 아니라 기준 시세로 볼 수 있어요. 가계약 전에 은행에 해당 단지 시세로 가능 여부를 확인하세요.</p></section></div>`;
- root.innerHTML=h; L.forEach((_,i)=>updTotal(i)); bind();
+  <section class="lcard"><h3>대출은 시세 기준</h3><p>보금자리론 가격 상한은 매매가가 아니라 기준 시세로 볼 수 있어요. 가계약 전에 은행에 해당 단지 시세로 가능 여부를 확인하세요.</p></section></div></div>`;
+ root.innerHTML=h; update(); bind();
  setStatus(ref?'모든 기기에 저장됨':'이 기기에만 저장됨');
 }
-function updTotal(i){const l=state.list[i],s=score(l),g=GATES.filter(([k])=>(l.g||{})[k]).length;
- $("rc-tot-"+i).innerHTML=`<div class="rc-total">${s??"–"}<small> / 100</small></div><div class="rc-bar"><span style="width:${s||0}%"></span></div>
- <div class="rc-gates">${g===GATES.length?'<span class="rc-flag ok">조건 모두 확인</span>':`<span class="rc-flag no">조건 ${g}/${GATES.length} 확인</span>`}</div>`;}
+const L=()=>state.list;
+function renderRank(){
+ const order=L().map((l,i)=>({i,s:score(l)})).sort((a,b)=>(b.s??-1)-(a.s??-1));
+ const top=order[0]&&order[0].s!=null&&L().length>1?order[0].i:-1;
+ $('rc-rank').innerHTML=L().map((l,i)=>{const s=score(l),g=gates(l);
+  return `<button type="button" class="rc-card" role="tab" aria-selected="${i===cur}" data-pick="${i}">
+   <span class="rc-cn">${i===top?'<i class="rc-top">1등</i>':''}${esc(l.name||'이름 없음')}</span>
+   <span class="rc-cs"><b>${s??'–'}</b>점</span><span class="rc-cbar"><span style="width:${s||0}%"></span></span>
+   <span class="rc-cm">${filled(l)}/${FLAT.length} 항목 · 조건 ${g}/${GATES.length}</span></button>`}).join('')
+  +`<button type="button" class="rc-card rc-add" id="rc-add">+ 매물 추가</button>`;
+}
+function renderCmp(){
+ const box=$('rc-cmp'); if(!box) return; const cell=v=>v?`<td class="rc-v v${v}">${v}</td>`:'<td class="rc-v">–</td>';
+ let t=`<table class="rc-t"><thead><tr><th class="rc-item">항목</th>${L().map((l,i)=>`<th${i===cur?' class="on"':''}>${esc(l.name||'이름 없음')}</th>`).join('')}</tr></thead><tbody>`;
+ CATS.forEach((c,ci)=>{t+=`<tr class="rc-tc"><td class="rc-item">${c.name} <small>×${c.w}</small></td>${L().map(l=>`<td>${catAvg(l,ci)??''}</td>`).join('')}</tr>`;
+  c.items.forEach(([n],ii)=>{t+=`<tr><td class="rc-item">${n}</td>${L().map(l=>cell(+(l.s||{})[ci+"_"+ii])).join('')}</tr>`})});
+ t+=`</tbody><tfoot><tr><td class="rc-item">입지 점수</td>${L().map(l=>`<td><b>${score(l)??'–'}</b></td>`).join('')}</tr>
+  <tr><td class="rc-item">통과 조건</td>${L().map(l=>`<td>${gates(l)}/${GATES.length}</td>`).join('')}</tr></tfoot></table>`;
+ box.innerHTML=t;
+}
+// 다시 그리지 않고 값·표시만 바꿔요 (입력 중 포커스 유지)
+function update(){
+ if(cur>=state.list.length) cur=state.list.length-1;
+ const l=state.list[cur]; l.s=l.s||{}; l.g=l.g||{};
+ BASIC.forEach(([k,,,fl])=>{const el=$('rc-'+k); if(el!==document.activeElement) el.value=l[k]??"";
+  const v=l[k]??""; const f=v===""?null:fl(v); $('rc-fl-'+k).innerHTML=f?`<span class="rc-flag ${f[0]}">${f[1]}</span>`:'';});
+ const nm=$('rc-name'); if(nm!==document.activeElement) nm.value=l.name||"";
+ root.querySelectorAll('.rc-pick button').forEach(b=>{const on=+l.s[b.dataset.s]===+b.dataset.v; b.setAttribute('aria-checked',String(on));});
+ Object.keys(SUGGEST).forEach(id=>{const v=SUGGEST[id](l),box=$('rc-sug-'+id); box.innerHTML=v&&!+l.s[id]?`<button type="button" class="rc-sugb" data-sug="${id}" data-v="${v}">입력값 기준 ${v}점 넣기</button>`:'';});
+ CATS.forEach((_,ci)=>{const a=catAvg(l,ci); $('rc-avg-'+ci).textContent=a?`평균 ${a}점`:'';});
+ GATES.forEach(([k])=>$('rc-g-'+k).checked=!!l.g[k]);
+ const g=gates(l); const gc=$('rc-gcount'); gc.textContent=`${g} / ${GATES.length} 확인`; gc.classList.toggle('ok',g===GATES.length);
+ const s=score(l); $('rc-score').textContent=s??'–'; $('rc-sbar').style.width=(s||0)+'%';
+ $('rc-sinfo').innerHTML=`${esc(l.name||'이름 없음')} · ${filled(l)}/${FLAT.length} 항목 입력 · ${g===GATES.length?'<span class="ok">조건 모두 확인</span>':`조건 ${g}/${GATES.length}`}`;
+ renderRank(); renderCmp(); const cb=root.querySelector('.rc-cmpbox'); if(cb) cb.hidden=L().length<2;
+}
 function bind(){
- const t=root.querySelector('.rc-t');
- t.addEventListener("input",e=>{const d=e.target.dataset,i=+d.i;if(isNaN(i))return;const l=state.list[i];l.s=l.s||{};l.g=l.g||{};
-  if(d.k){l[d.k]=e.target.value;if(d.k!=="name"){render();const el=$("rc-"+d.k+"-"+i);el.focus();try{el.setSelectionRange(99,99)}catch(_){}}}
-  else if(d.s){l.s[d.s]=e.target.value;updTotal(i)}
-  else if(d.g){l.g[d.g]=e.target.checked;updTotal(i)}
-  save();});
- t.addEventListener("change",e=>{const d=e.target.dataset;if(d.g){const l=state.list[+d.i];l.g=l.g||{};l.g[d.g]=e.target.checked;updTotal(+d.i);save()}});
- t.addEventListener("click",e=>{const r=e.target.dataset.rm;if(r===undefined)return;if(!confirm(`'${state.list[+r].name}'을(를) 지울까요?`))return;state.list.splice(+r,1);if(!state.list.length)state.list.push(blank(1));save();render()});
- $("rcadd").onclick=()=>{state.list.push(blank(state.list.length+1));save();render();const n=$("rc-name-"+(state.list.length-1));n&&n.select()};
- let armed=false;$("rcclear").onclick=e=>{if(!armed){armed=true;e.target.textContent="한 번 더 누르면 초기화";setTimeout(()=>{armed=false;if(e.target.isConnected)e.target.textContent="전체 초기화"},3000);return}
-  state={list:[blank(1),blank(2)]};save();render();};
+ const r=root.querySelector('.rc');
+ r.addEventListener("input",e=>{const k=e.target.dataset.k; if(!k) return; state.list[cur][k]=e.target.value; update(); save();});
+ r.addEventListener("change",e=>{const g=e.target.dataset.g; if(!g) return; const l=state.list[cur]; l.g=l.g||{}; l.g[g]=e.target.checked; update(); save();});
+ r.addEventListener("click",e=>{
+  const b=e.target.closest('[data-s],[data-sug]');
+  if(b){ const l=state.list[cur],id=b.dataset.s||b.dataset.sug,v=b.dataset.v; l.s=l.s||{};
+   if(b.dataset.s&&+l.s[id]===+v) delete l.s[id]; else l.s[id]=v; update(); save(); return; }
+  const p=e.target.closest('[data-pick]'); if(p){ if(+p.dataset.pick!==cur){ cur=+p.dataset.pick; render(); } return; }
+  if(e.target.closest('#rc-add')){ state.list.push(blank(state.list.length+1)); cur=state.list.length-1; save(); render(); const n=$('rc-name'); n.focus(); n.select(); return; }
+  if(e.target.closest('#rc-rm')){ if(!confirm(`'${state.list[cur].name}'을(를) 지울까요?`)) return; state.list.splice(cur,1); if(!state.list.length) state.list.push(blank(1)); cur=Math.max(0,cur-1); save(); render(); }
+ });
 }
 
 window.VIEWS=Object.assign(window.VIEWS||{},{realtyCheck:{

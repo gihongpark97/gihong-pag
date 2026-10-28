@@ -1,5 +1,5 @@
-/* 부동산 > 임장 체크리스트: 집 보러 갈 때 현장에서 하나씩 체크하는 목록. 한 번에 한 집, 다 보면 "다음 집용으로 초기화".
-   저장 위치: Firestore shared/home/pages/imjang = {state:{'c-섹션-항목':true, 'h-name'/'h-price'/'h-memo':'…', 'n-섹션-항목':'항목별 비고'}, updatedAt}
+/* 부동산 > 임장 체크리스트: 집 보러 갈 때 현장에서 하나씩 체크하는 목록. 본 집마다 따로 저장돼서 위쪽 칩으로 오가며 비교해요.
+   저장 위치: Firestore shared/home/pages/imjang = {state:{houses:[{id,name,price,memo,c:{'섹션-항목':true},n:{'섹션-항목':'비고'}}],cur}, updatedAt}
    로그인 없이 쓰면 이 기기(localStorage 'hong.imjang', 백업에도 들어가요)에만 저장돼요. 원본: 홍이 님이 준 "아파트 임장 체크리스트.html" */
 (function(){
 const DATA=[
@@ -129,11 +129,24 @@ const DATA=[
   ["하루 두고 다시 생각하기",false,"그 자리에서 바로 송금하지 않기"]
  ]]
 ];
-const LS='hong.imjang', DOC='imjang', FIELDS=["h-name","h-price","h-memo"];
+const LS='hong.imjang', DOC='imjang', VLS='hong.imjang.view';
 const TOTAL=DATA.reduce((n,[,items])=>n+items.length,0);
+const KEYS=DATA.reduce((n,[,items])=>n+items.filter(it=>it[1]).length,0);
 let state=null, root=null, ref=null, unsub=null, pending=false, saving=false, saveT=null;
+let filter='all', openNotes=new Set(), openSecs=null;   // 화면 상태: 이 기기에서만 기억해요
 
-function load(){ try{ const s=JSON.parse(localStorage.getItem(LS)); if(s&&typeof s==='object') return s; }catch(e){} return {}; }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
+function blank(n){ return {id:uid(),name:n?`${n}번째 집`:'첫 번째 집',price:'',memo:'',c:{},n:{}}; }
+// 예전 형식(한 집만 저장하던 납작한 객체)도 한 집으로 옮겨요
+function norm(s){
+  if(s&&Array.isArray(s.houses)&&s.houses.length){ s.houses.forEach(h=>{h.c=h.c||{};h.n=h.n||{};}); if(!s.houses.some(h=>h.id===s.cur)) s.cur=s.houses[0].id; return s; }
+  const h=blank(0);
+  if(s&&typeof s==='object'){ h.name=s['h-name']||h.name; h.price=s['h-price']||''; h.memo=s['h-memo']||'';
+    Object.keys(s).forEach(k=>{ if(k.startsWith('c-')) h.c[k.slice(2)]=true; else if(k.startsWith('n-')) h.n[k.slice(2)]=s[k]; }); }
+  return {houses:[h],cur:h.id};
+}
+function cur(){ return state.houses.find(h=>h.id===state.cur)||state.houses[0]; }
+function load(){ try{ const s=JSON.parse(localStorage.getItem(LS)); if(s&&typeof s==='object') return norm(s); }catch(e){} return norm(null); }
 function setStatus(t,err){ const s=root&&root.querySelector('#imsync'); if(s){ s.textContent=t; s.classList.toggle('err',!!err); } }
 function save(){
   try{ localStorage.setItem(LS,JSON.stringify(state)); }catch(e){}
@@ -154,68 +167,120 @@ function sync(){
   unsub=ref.onSnapshot(snap=>{
     if(snap.metadata.hasPendingWrites||pending||saving) return;
     const d=snap.exists?snap.data():null;
-    if(d&&d.state&&typeof d.state==='object'){ state=d.state; try{ localStorage.setItem(LS,JSON.stringify(state)); }catch(e){} }
-    else if(!snap.metadata.fromCache&&Object.keys(state).length){ pending=true; flush(); }   // 처음: 이 기기 내용을 올려요
-    if(root) fill();
+    if(d&&d.state&&typeof d.state==='object'){ const was=state&&state.cur; state=norm(d.state); if(was&&state.houses.some(h=>h.id===was)) state.cur=was; try{ localStorage.setItem(LS,JSON.stringify(state)); }catch(e){} }
+    else if(!snap.metadata.fromCache){ pending=true; flush(); }   // 처음: 이 기기 내용을 올려요
+    if(root){ renderHouses(); fill(); }
     setStatus('모든 기기에 저장됨');
   },e=>setStatus(e&&e.code==='permission-denied'?'이 계정은 볼 권한이 없어요':'동기화 끊김 · 새로고침해 주세요',true));
 }
 
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
 const $=id=>root.querySelector('#'+id);
+function counts(h){ let done=0,key=0; DATA.forEach(([,items],si)=>items.forEach((it,ii)=>{ if(h.c[si+'-'+ii]){ done++; if(it[1]) key++; } })); return {done,key}; }
 
 function render(){
  let h=`<div class="im"><div class="lhead"><div><div class="crumb">부동산</div><h1>아파트 임장 체크리스트</h1>
-  <div class="sum">서울·경기 구축 실거주 기준. 현장에서 하나씩 탭해서 체크하세요.</div></div>
+  <div class="sum">서울·경기 구축 실거주 기준. 본 집마다 따로 저장되니 현장에서 탭만 하세요.</div></div>
   <div class="acct"><div class="sync" id="imsync"></div></div></div>
+  <div class="im-houses" id="im-houses" role="tablist" aria-label="본 집"></div>
   <section class="lcard im-house" aria-label="매물 정보">
-   <label for="h-name">매물 (단지·동·호수)</label><input type="text" id="h-name" placeholder="예: ○○아파트 103동 7층">
-   <label for="h-price">호가 / 최근 실거래가</label><input type="text" id="h-price" placeholder="예: 호가 5억 7천 / 실거래 5억 4천">
-   <label for="h-memo">메모 (하자, 수리비 추정, 느낌)</label><textarea id="h-memo" placeholder="예: 샷시 원래 것 → 교체 600만 원 예상, 안방 결로 흔적"></textarea>
+   <div class="im-hrow"><label class="im-f"><span>매물 (단지·동·층)</span><input type="text" id="h-name" data-h="name" placeholder="예: ○○아파트 103동 7층"></label>
+   <label class="im-f"><span>호가 / 최근 실거래가</span><input type="text" id="h-price" data-h="price" placeholder="예: 호가 5억 7천 / 실거래 5억 4천"></label></div>
+   <label class="im-f"><span>메모 (하자, 수리비 추정, 느낌)</span><textarea id="h-memo" data-h="memo" rows="2" placeholder="예: 샷시 원래 것 → 교체 600만 원 예상, 안방 결로 흔적"></textarea></label>
   </section>
-  <div class="im-bar" role="status"><div class="im-track"><div class="im-fill" id="im-fill"></div></div><div class="im-count" id="im-count">0 / ${TOTAL}</div></div>
-  <div class="im-legend"><span><i class="im-dot"></i>놓치면 큰돈 나가는 항목</span><span><a href="#realty-check">입지 점수 매기기 →</a></span></div>
-  <div class="im-list">`;
+  <div class="im-bar"><div class="im-prog" role="status"><div class="im-track"><div class="im-fill" id="im-fill"></div></div>
+   <div class="im-count"><b id="im-count">0 / ${TOTAL}</b><span id="im-keyc"></span></div></div>
+   <div class="im-filter" role="group" aria-label="보기">
+    <button type="button" class="chip" data-f="all">전체</button><button type="button" class="chip" data-f="key">핵심만</button><button type="button" class="chip" data-f="left">남은 것만</button>
+    <button type="button" class="chip im-fold" id="im-fold">모두 펼치기</button></div></div>
+  <div class="im-legend"><span><i class="im-dot"></i>놓치면 큰돈 나가는 핵심 항목</span><span><a href="#realty-check">입지 점수 매기기 →</a></span></div>
+  <div class="im-list" id="im-list">`;
  DATA.forEach(([title,items],si)=>{
-  h+=`<details class="im-sec"${si<2?' open':''}><summary><span>${esc(title)}</span><span class="im-meta" id="im-meta-${si}"></span></summary><div class="im-items">`;
-  items.forEach(([t,key,hint],ii)=>{const id=`c-${si}-${ii}`;
-   h+=`<div class="im-item${key?' key':''}"><label class="im-chk" for="${id}"><input type="checkbox" id="${id}" data-c="${id}"><span class="im-txt"><b>${esc(t)}</b>${hint?`<small>${esc(hint)}</small>`:''}</span></label><input type="text" class="im-note-in" id="n-${si}-${ii}" data-n="n-${si}-${ii}" placeholder="비고" aria-label="${esc(t)} 비고"></div>`});
+  h+=`<details class="im-sec" data-si="${si}"><summary><span class="im-st"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round"/></svg>${esc(title)}</span><span class="im-meta" id="im-meta-${si}"></span></summary><div class="im-items">`;
+  items.forEach(([t,key,hint],ii)=>{const id=`${si}-${ii}`;
+   h+=`<div class="im-item${key?' key':''}" data-id="${id}"><label class="im-chk"><input type="checkbox" data-c="${id}"><span class="im-txt"><b>${esc(t)}</b>${hint?`<small>${esc(hint)}</small>`:''}</span></label>
+    <button type="button" class="im-nbtn" data-nb="${id}" aria-label="${esc(t)} 메모">메모</button>
+    <input type="text" class="im-note-in" data-n="${id}" placeholder="여기에 메모 (예: 확인 결과, 수리비)" aria-label="${esc(t)} 메모" hidden></div>`});
   h+=`</div></details>`;
  });
- h+=`</div><div class="im-actions"><button class="chip del" type="button" id="im-reset">다음 집용으로 초기화</button></div>
-  <div class="im-confirm" id="im-confirm" hidden><span>체크와 메모를 모두 지울까요?</span><button class="btn im-yes" type="button" id="im-yes">지우기</button><button class="chip" type="button" id="im-no">취소</button></div>
+ h+=`<p class="im-empty" id="im-empty" hidden>이 보기에서 남은 항목이 없어요. 수고했어요!</p></div>
+  <div class="im-actions"><button class="chip" type="button" id="im-uncheck">이 집 체크만 지우기</button><button class="chip del" type="button" id="im-del">이 집 삭제</button></div>
+  <div class="im-confirm" id="im-confirm" hidden><span id="im-cmsg"></span><button class="btn im-yes" type="button" id="im-yes">지우기</button><button class="chip" type="button" id="im-no">취소</button></div>
   <p class="im-note">수리비는 24평 구축 기준 대략치예요. 실제 견적은 업체 2~3곳에서 받아보세요.</p></div>`;
- root.innerHTML=h; fill(); bind();
+ root.innerHTML=h;
+ try{ const v=JSON.parse(localStorage.getItem(VLS)); if(v&&['all','key','left'].includes(v.f)) filter=v.f; }catch(e){}
+ renderHouses(); fill(true); bind();
  setStatus(ref?'모든 기기에 저장됨':'이 기기에만 저장됨');
 }
+function renderHouses(){
+ const box=$('im-houses'); if(!box) return;
+ box.innerHTML=state.houses.map(h=>{const {done,key}=counts(h),on=h.id===state.cur;
+  return `<button type="button" class="im-hchip" role="tab" aria-selected="${on}" data-house="${h.id}"><b>${esc(h.name||'이름 없음')}</b><span>${done}/${TOTAL} · 핵심 ${key}/${KEYS}</span></button>`}).join('')
+  +`<button type="button" class="im-hchip im-hadd" id="im-hadd">+ 새 집</button>`;
+}
 // 화면은 그대로 두고 값만 다시 채워요 (다른 기기에서 바뀐 내용 반영, 입력 중인 칸은 건드리지 않아요)
-function fill(){
- FIELDS.forEach(id=>{const el=$(id); if(el&&el!==document.activeElement) el.value=state[id]||"";});
- root.querySelectorAll('.im-chk input').forEach(c=>c.checked=!!state[c.dataset.c]);
- root.querySelectorAll('.im-note-in').forEach(el=>{ if(el!==document.activeElement) el.value=state[el.dataset.n]||""; });
+function fill(reset){
+ const H=cur();
+ ['name','price','memo'].forEach(k=>{const el=$('h-'+k); if(el&&el!==document.activeElement) el.value=H[k]||"";});
+ root.querySelectorAll('.im-chk input').forEach(c=>c.checked=!!H.c[c.dataset.c]);
+ root.querySelectorAll('.im-note-in').forEach(el=>{ const id=el.dataset.n,v=H.n[id]||"";
+  if(el!==document.activeElement) el.value=v;
+  el.hidden=!(v||openNotes.has(id)); const b=root.querySelector(`[data-nb="${id}"]`); b.classList.toggle('has',!!v); b.setAttribute('aria-expanded',String(!el.hidden)); });
+ if(reset||!openSecs){ // 집을 바꾸면 처음 끝나지 않은 섹션 하나만 펼쳐요
+  openSecs=new Set(); const first=DATA.findIndex(([,items],si)=>items.some((_,ii)=>!H.c[si+'-'+ii])); openSecs.add(first<0?0:first); }
+ root.querySelectorAll('.im-sec').forEach(d=>d.open=openSecs.has(+d.dataset.si));
  update();
 }
 function update(){
- let done=0;
- DATA.forEach(([,items],si)=>{let n=0;
-  items.forEach((_,ii)=>{const c=$(`c-${si}-${ii}`);c.closest('.im-item').classList.toggle('checked',c.checked);if(c.checked)n++});
-  done+=n; const m=$('im-meta-'+si); m.textContent=`${n} / ${items.length}`; m.classList.toggle('done',n===items.length);});
- $('im-count').textContent=`${done} / ${TOTAL}`; $('im-fill').style.width=(done/TOTAL*100)+'%';
+ const H=cur(); let done=0,key=0,anyVis=false;
+ root.querySelectorAll('[data-f]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.f===filter)));
+ DATA.forEach(([,items],si)=>{let n=0,vis=0;
+  items.forEach((it,ii)=>{const id=si+'-'+ii,on=!!H.c[id],row=root.querySelector(`.im-item[data-id="${id}"]`);
+   row.classList.toggle('checked',on); if(on){n++; if(it[1]) key++;}
+   const show=filter==='all'||(filter==='key'&&it[1])||(filter==='left'&&!on); row.hidden=!show; if(show) vis++;});
+  done+=n; const m=$('im-meta-'+si); m.textContent=n===items.length?'완료':`${n} / ${items.length}`; m.classList.toggle('done',n===items.length);
+  const sec=root.querySelector(`.im-sec[data-si="${si}"]`); sec.hidden=!vis; if(vis) anyVis=true;});
+ $('im-count').textContent=`${done} / ${TOTAL}`; $('im-keyc').textContent=`핵심 ${key} / ${KEYS}`;
+ $('im-fill').style.width=(done/TOTAL*100)+'%'; $('im-empty').hidden=anyVis;
+ const all=[...root.querySelectorAll('.im-sec:not([hidden])')].every(d=>d.open); $('im-fold').textContent=all?'모두 접기':'모두 펼치기';
 }
 function bind(){
- root.querySelector('.im-list').addEventListener('change',e=>{const id=e.target.dataset.c;if(!id)return;
-  if(e.target.checked) state[id]=true; else delete state[id]; update(); save();});
- root.querySelector('.im-list').addEventListener('input',e=>{const id=e.target.dataset.n;if(!id)return;
-  if(e.target.value) state[id]=e.target.value; else delete state[id]; save();});
- FIELDS.forEach(id=>$(id).addEventListener('input',e=>{state[id]=e.target.value;save();}));
- const cf=$('im-confirm');
- $('im-reset').onclick=()=>{cf.hidden=false};
+ const list=$('im-list');
+ list.addEventListener('change',e=>{const id=e.target.dataset.c;if(!id)return;const H=cur();
+  if(e.target.checked) H.c[id]=true; else delete H.c[id];
+  update(); renderHouses(); save();
+  // 섹션을 다 채우면 접고 다음 남은 섹션을 펼쳐요
+  const si=+id.split('-')[0], items=DATA[si][1];
+  if(e.target.checked&&items.every((_,ii)=>H.c[si+'-'+ii])) setTimeout(()=>{ if(!root) return;
+   const sec=root.querySelector(`.im-sec[data-si="${si}"]`); sec.open=false; openSecs.delete(si);
+   for(let k=1;k<DATA.length;k++){const nx=(si+k)%DATA.length; if(DATA[nx][1].some((_,ii)=>!H.c[nx+'-'+ii])){ const d=root.querySelector(`.im-sec[data-si="${nx}"]`); d.open=true; openSecs.add(nx); d.scrollIntoView({block:'nearest',behavior:'smooth'}); break; }}
+   update(); },350);
+ });
+ list.addEventListener('input',e=>{const id=e.target.dataset.n;if(!id)return;const H=cur();
+  if(e.target.value) H.n[id]=e.target.value; else delete H.n[id]; root.querySelector(`[data-nb="${id}"]`).classList.toggle('has',!!e.target.value); save();});
+ list.addEventListener('click',e=>{const b=e.target.closest('[data-nb]'); if(!b) return; const id=b.dataset.nb, el=root.querySelector(`.im-note-in[data-n="${id}"]`);
+  if(el.hidden){ openNotes.add(id); el.hidden=false; el.focus(); } else if(!el.value){ openNotes.delete(id); el.hidden=true; } else el.focus();
+  b.setAttribute('aria-expanded',String(!el.hidden)); });
+ list.addEventListener('toggle',e=>{const si=+e.target.dataset.si; if(isNaN(si)) return; if(e.target.open) openSecs.add(si); else openSecs.delete(si); update();},true);
+ ['name','price','memo'].forEach(k=>$('h-'+k).addEventListener('input',e=>{cur()[k]=e.target.value; if(k==='name') renderHouses(); save();}));
+ root.querySelector('.im-filter').addEventListener('click',e=>{const f=e.target.dataset.f; if(!f) return; filter=f; try{ localStorage.setItem(VLS,JSON.stringify({f})); }catch(_){} update();});
+ $('im-fold').onclick=()=>{const secs=[...root.querySelectorAll('.im-sec:not([hidden])')], all=secs.every(d=>d.open);
+  secs.forEach(d=>{d.open=!all; const si=+d.dataset.si; if(!all) openSecs.add(si); else openSecs.delete(si);}); update();};
+ $('im-houses').addEventListener('click',e=>{
+  if(e.target.closest('#im-hadd')){ const h=blank(state.houses.length+1); state.houses.push(h); state.cur=h.id; openNotes.clear(); save(); renderHouses(); fill(true); const n=$('h-name'); n.focus(); n.select(); return; }
+  const b=e.target.closest('[data-house]'); if(!b||b.dataset.house===state.cur) return;
+  state.cur=b.dataset.house; openNotes.clear(); save(); renderHouses(); fill(true); });
+ const cf=$('im-confirm'); let act=null;
+ const ask=(msg,fn)=>{ $('im-cmsg').textContent=msg; act=fn; cf.hidden=false; cf.scrollIntoView({block:'nearest'}); };
+ $('im-uncheck').onclick=()=>ask(`'${cur().name||'이 집'}'의 체크와 항목 메모를 지울까요? 이름·호가·메모는 남아요.`,()=>{const H=cur(); H.c={}; H.n={};});
+ $('im-del').onclick=()=>ask(`'${cur().name||'이 집'}'을(를) 통째로 지울까요?`,()=>{
+  state.houses=state.houses.filter(h=>h.id!==state.cur); if(!state.houses.length) state.houses.push(blank(0)); state.cur=state.houses[0].id;});
  $('im-no').onclick=()=>{cf.hidden=true};
- $('im-yes').onclick=()=>{state={};save();FIELDS.forEach(id=>$(id).value="");fill();cf.hidden=true;window.scrollTo(0,0);};
+ $('im-yes').onclick=()=>{ if(act) act(); act=null; cf.hidden=true; openNotes.clear(); save(); renderHouses(); fill(true); window.scrollTo(0,0); };
 }
 
 window.VIEWS=Object.assign(window.VIEWS||{},{imjang:{
-  open(container){ root=container; state=load(); render(); sync(); },
+  open(container){ root=container; state=load(); openSecs=null; render(); sync(); },
   close(){ if(unsub){ unsub(); unsub=null; } if(pending) flush(); root=null; },
   sync(){ if(root) sync(); },
 }});
