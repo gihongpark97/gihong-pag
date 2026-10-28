@@ -376,7 +376,7 @@ function quickView(kind,S,R){
   const head=el('div',{class:'lbar'},el('h2',{},'결과'),el('span',{class:'pill '+(q.ok?'good':'bad')},q.ok?'신청 가능':'조건 안 맞음'));
   const result=el('section',{class:'lcard lresult'},head,
     el('div',{class:'lbigs'},
-      big('월 상환액',q.loan?won(q.first):'-',(Q.method==='원금균등'||Q.method==='체증식')&&q.loan?`첫 달 기준 · 마지막 달 ${won(q.last)}${Q.method==='체증식'?' (매달 조금씩 늘어요, 만 39세 이하)':''}`:(q.loan?`${S.base.term}년 동안 매달 같은 금액`:null),'main'),
+      big('매달 내는 돈 (원금+이자)',q.loan?won(q.first):'-',q.loan?payNote(S,q):null,'main'),
       big('대출 금액',q.loan?eok(q.loan):'-',q.max&&+Q.borrow>0&&q.loan<q.max?`최대 ${eok(q.max)}까지 가능`:(q.max?`${q.caps.reduce((a,c)=>c[1]<a[1]?c:a)[0]} 기준`:null)),
       big('적용 금리',pct(q.rate),isB?(married?'신혼 우대 반영':'고정금리'):'소득·기간별 금리 + 우대'),
       big('총 이자',q.loan?eok(q.interest):'-',q.loan?`${S.base.term}년 동안`:null),
@@ -422,23 +422,40 @@ function schedule(loan,rate,n,method,M){
   }
   return rows;
 }
+function schedRows(S,q){ return schedule(q.loan,q.rate,S.base.term*12,S.quick.method,+S.quick.gradMult||2.7); }
+// 큰 카드 아래 설명: 1회차만이 아니라 그다음 회차들이 얼마인지도 보여줘요
+function payNote(S,q){
+  const rows=schedRows(S,q), n=rows.length, m=S.quick.method;
+  if(m==='원리금균등') return `${n}회 모두 같은 금액이에요 (${S.base.term}년)`;
+  const diff=n>1?rows[1].pay-rows[0].pay:0;
+  return `1회차 금액이에요 · 2회차 ${won(rows[1]?.pay)} · 마지막 ${n}회차 ${won(rows[n-1].pay)} · 매달 약 ${won(Math.abs(diff))}씩 ${diff<0?'줄어요':'늘어요'}${m==='체증식'?' (만 39세 이하)':''}`;
+}
 function scheduleBox(S,q){
   if(!q.loan) return null;
-  const n=S.base.term*12, rows=schedule(q.loan,q.rate,n,S.quick.method,+S.quick.gradMult||2.7);
-  const body=[], sum=a=>a.reduce((t,x)=>t+x,0);
-  for(let y=0;y<S.base.term;y++){
-    const ys=rows.slice(y*12,y*12+12);
+  const rows=schedRows(S,q), n=rows.length, sum=a=>a.reduce((t,x)=>t+x,0), years=S.base.term;
+  const ysOf=y=>rows.slice(y*12,y*12+12);
+  // 연도별 월 납입액: 그 해 매달 얼마씩 내는지 한눈에
+  const yearly=el('div',{class:'lyears'},...Array.from({length:years},(_,y)=>{ const ys=ysOf(y), lo=ys[0].pay, hi=ys[ys.length-1].pay;
+    return el('div',{},el('span',{class:'llab'},`${y+1}년차`),el('b',{},Math.abs(hi-lo)<1?won(lo):`${won(lo)} → ${won(hi)}`)); }));
+  const body=[];
+  for(let y=0;y<years;y++){
+    const ys=ysOf(y);
     ys.forEach((x,i)=>body.push(el('tr',{},el('td',{},`${x.no}회`),el('td',{},`${y+1}년차 ${i+1}개월`),
-      el('td',{},won(x.pay)),el('td',{},won(x.prin)),el('td',{},won(x.int)),el('td',{},won(x.bal)))));
-    body.push(el('tr',{class:'lsum'},el('td',{colspan:2},`${y+1}년차 합계`),
-      el('td',{},won(sum(ys.map(x=>x.pay)))),el('td',{},won(sum(ys.map(x=>x.prin)))),el('td',{},won(sum(ys.map(x=>x.int)))),el('td',{},won(ys[ys.length-1].bal))));
+      el('td',{},won(x.prin)),el('td',{},won(x.int)),el('td',{class:'lpay'},won(x.pay)),el('td',{},won(x.bal)))));
+    body.push(el('tr',{class:'lsum'},el('td',{colspan:2},`${y+1}년차 12개월 동안 낸 돈`),
+      el('td',{},won(sum(ys.map(x=>x.prin)))),el('td',{},won(sum(ys.map(x=>x.int)))),el('td',{},won(sum(ys.map(x=>x.pay)))),el('td',{},won(ys[ys.length-1].bal))));
   }
+  const r1=rows[0];
   return el('section',{class:'lcard lsched'},
-    el('div',{class:'lbar'},el('h2',{},'월별 상환표'),el('span',{class:'lsub'},`${S.quick.method} · ${S.base.term}년 · ${n}회 · 총 ${eok(sum(rows.map(x=>x.pay)))}`)),
+    el('div',{class:'lbar'},el('h2',{},'월별 상환표'),el('span',{class:'lsub'},`${S.quick.method} · ${years}년 · ${n}회 · ${years}년 동안 총 ${eok(sum(rows.map(x=>x.pay)))}`)),
+    el('p',{class:'lexplain'},'매달 내는 돈 = ',el('b',{},'원금'),' + ',el('b',{},'이자'),'예요. 예를 들어 1회차는 원금 ',won(r1.prin),' + 이자 ',won(r1.int),' = ',el('b',{},won(r1.pay)),'를 내요. ',
+      '이자는 "남은 잔액 × 금리 ÷ 12"라서 처음엔 크고, 원금을 갚을수록 줄어요. ',S.quick.method==='원리금균등'?'원리금균등은 내는 돈은 매달 같고, 그 안에서 이자가 줄어든 만큼 원금이 늘어요.':S.quick.method==='원금균등'?'원금균등은 원금을 매달 똑같이 갚아서, 이자가 줄어드는 만큼 내는 돈도 매달 줄어요.':'체증식은 내는 돈이 매달 조금씩 늘어요. 초반엔 내는 돈이 이자보다 적으면 원금이 마이너스로 나오고 잔액이 잠깐 늘어요.'),
+    el('h3',{},'해마다 매달 내는 돈'),yearly,
+    el('h3',{},'회차별 자세히'),
     el('div',{class:'ltablewrap lschedwrap'},el('table',{class:'ltable'},
-      el('thead',{},el('tr',{},...['회차','시기','월 납입액','원금','이자','남은 잔액'].map(t=>el('th',{},t)))),
+      el('thead',{},el('tr',{},...['회차','시기','원금','이자','= 매달 내는 돈','남은 잔액'].map(t=>el('th',{},t)))),
       el('tbody',{},...body))),
-    el('p',{class:'lnote'},`주담대 ${eok(q.loan)}, 금리 ${pct(q.rate)} 기준이에요. 회사대출·신용대출은 빠져 있어요. 원 단위는 반올림이라 은행 상환표와 몇 원 다를 수 있어요.${S.quick.method==='체증식'?' 체증식은 초반 납입액이 이자보다 적으면 원금이 음수로 나오고 잔액이 잠깐 늘어요.':''}`));
+    el('p',{class:'lnote'},`주담대 ${eok(q.loan)}, 금리 ${pct(q.rate)} 기준이에요. 회사대출·신용대출은 빠져 있어요. 원 단위는 반올림이라 은행 상환표와 몇 원 다를 수 있어요.`));
 }
 function creditBox(S,q){
   const c=q.credit, C=S.credit;
