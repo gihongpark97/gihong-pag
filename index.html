@@ -48,6 +48,57 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-r
 .chip{border:1px solid var(--line);border-radius:999px;padding:4px 12px;color:var(--muted)}
 .chip[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);border-color:transparent}
 ul.tree{list-style:none;margin:0;padding:0}
+.seg{display:inline-flex;gap:0}
+.seg .chip{border-radius:0}.seg .chip:first-child{border-radius:999px 0 0 999px}.seg .chip:last-child{border-radius:0 999px 999px 0;margin-left:-1px}
+.seg .chip[aria-pressed="true"]{border-color:var(--accent-soft)}
+/* 할 일 날짜 */
+.dt{position:relative;flex:none;display:inline-flex;align-items:center;gap:3px;font-size:.75rem;font-variant-numeric:tabular-nums;color:var(--muted);border-radius:999px;padding:2px 8px;white-space:nowrap;cursor:pointer}
+.dt.set{background:var(--blue-soft);color:var(--blue)}
+.dt.today{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.dt.late{background:var(--danger-soft);color:var(--danger)}
+.done>.row .dt.set{background:none;color:var(--muted)}
+.dt input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:0;padding:0;font-size:16px}
+.dt.empty{display:none}
+.row:hover .dt.empty,.row:focus-within .dt.empty{display:inline-flex}
+@media (hover:none){.dt.empty{display:inline-flex;padding:2px 6px}}
+/* 달력 */
+.cal{margin-top:6px}
+.calhead{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.calhead h2{font-family:var(--font-display);font-size:1.2rem;margin:0 auto 0 4px;font-variant-numeric:tabular-nums}
+.calhead .ib{width:36px;height:36px;display:grid;place-items:center;border-radius:8px;color:var(--muted)}
+.calhead .ib:hover{background:var(--surface)}
+.cgrid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--line);gap:1px}
+.cwd{background:var(--surface);text-align:center;font-size:.75rem;color:var(--muted);padding:6px 0}
+.cwd.sun,.cday.sun .cnum{color:var(--danger)}.cwd.sat,.cday.sat .cnum{color:var(--blue)}
+.cday{background:var(--surface);min-height:92px;padding:4px;display:flex;flex-direction:column;gap:2px;text-align:left;align-items:stretch;justify-content:flex-start;border-radius:0}
+.cday.out{background:var(--bg)}.cday.out .cnum{opacity:.45}
+.cday:hover{background:var(--accent-soft)}
+.cday[aria-pressed="true"]{box-shadow:inset 0 0 0 2px var(--accent)}
+.cnum{font-size:.8rem;font-variant-numeric:tabular-nums;line-height:1;padding:3px 4px;align-self:flex-start;border-radius:999px}
+.cday.today .cnum{background:var(--accent);color:var(--bg)!important;font-weight:600}
+.cpill{font-size:.72rem;line-height:1.3;padding:1px 5px;border-radius:4px;background:var(--blue-soft);color:var(--blue);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cpill.d{background:none;color:var(--muted);text-decoration:line-through}
+.cpill.late{background:var(--danger-soft);color:var(--danger)}
+.cmore{font-size:.7rem;color:var(--muted);padding-left:4px}
+.cdots{display:none;gap:3px;flex-wrap:wrap;padding:2px 4px}
+.cdots i{width:6px;height:6px;border-radius:50%;background:var(--blue)}.cdots i.d{background:var(--line)}.cdots i.late{background:var(--danger)}
+@media (max-width:560px){.cday{min-height:54px}.cpill,.cmore{display:none}.cdots{display:flex}}
+.agenda{margin-top:14px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 12px 8px}
+.agenda h3{font-size:1rem;margin:0 0 6px;display:flex;align-items:baseline;gap:8px}
+.agenda h3 span{font-size:.8rem;color:var(--muted);font-weight:400}
+.aitem{display:flex;align-items:center;gap:6px;min-height:42px;border-top:1px solid var(--line)}
+.aitem:first-of-type{border-top:0}
+.aitem .ck{margin-right:2px}
+.aitem .atx{flex:1;min-width:0;overflow-wrap:anywhere}
+.aitem .atx small{display:block;font-size:.72rem;color:var(--muted)}
+.aitem.done .atx b{color:var(--muted);text-decoration:line-through;font-weight:400}
+.aitem .atx b{font-weight:400}
+.anone{color:var(--muted);font-size:.875rem;padding:6px 0}
+.agenda form{display:flex;gap:8px;margin-top:8px}.agenda form input{flex:1;min-width:0}
+.undated{margin-top:14px}
+.undated summary{cursor:pointer;color:var(--muted);font-size:.875rem;padding:6px 2px}
+.undated .aitem{padding-left:4px}
+.aitem .dt.empty{display:inline-flex;border:1px dashed var(--line)}.aitem .dt.empty::after{content:"날짜 정하기"}
 ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(--line);margin-left:15px}
 .row{display:flex;align-items:center;gap:4px;min-height:44px;border-radius:8px;padding-right:4px}
 .row:hover{background:var(--surface)}
@@ -518,12 +569,14 @@ body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--l
   </form>
 
   <div class="tools">
+    <span class="seg" role="group" aria-label="보기 방식"><button class="chip" id="mode-list" aria-pressed="true">목록</button><button class="chip" id="mode-cal" aria-pressed="false">달력</button></span>
     <button class="chip" id="hidedone" aria-pressed="false">완료 숨기기</button>
-    <button class="chip" id="expandall">모두 펼치기</button>
-    <button class="chip" id="collapseall">모두 접기</button>
+    <button class="chip listonly" id="expandall">모두 펼치기</button>
+    <button class="chip listonly" id="collapseall">모두 접기</button>
   </div>
 
   <ul class="tree" id="tree"></ul>
+  <section class="cal" id="cal" hidden></section>
   <div class="empty" id="empty" hidden>
     <b>아직 할 일이 없어요</b>
     <span>위 칸에 큰 일을 적고, 각 항목의 ＋ 버튼으로 세부 할 일을 가지처럼 붙이세요.</span>
@@ -559,21 +612,25 @@ body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--l
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=20261103a"></script>
-<script src="aptprice.js?v=20261103a"></script>
-<script src="loan.js?v=20261103a"></script>
-<script src="wedding.js?v=20261103a"></script>
-<script src="realty.js?v=20261103a"></script>
-<script src="imjang.js?v=20261103a"></script>
-<script src="asset.js?v=20261103a"></script>
-<script src="appliance.js?v=20261103a"></script>
-<script src="stocks.js?v=20261103a"></script>
-<script src="admin.js?v=20261103a"></script>
+<script src="firebase-config.js?v=20261103b"></script>
+<script src="aptprice.js?v=20261103b"></script>
+<script src="loan.js?v=20261103b"></script>
+<script src="wedding.js?v=20261103b"></script>
+<script src="realty.js?v=20261103b"></script>
+<script src="imjang.js?v=20261103b"></script>
+<script src="asset.js?v=20261103b"></script>
+<script src="appliance.js?v=20261103b"></script>
+<script src="stocks.js?v=20261103b"></script>
+<script src="admin.js?v=20261103b"></script>
 <script>
 const ICON = {
   chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   check:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7.5l2.5 2.5L11 4.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   plus:'<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 4v10M4 9h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  cal:'<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1.8" y="2.8" width="10.4" height="9.4" rx="1.6" stroke="currentColor" stroke-width="1.4"/><path d="M1.8 5.8h10.4M4.6 1.6v2.4M9.4 1.6v2.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+  prev:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3.5L5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  next:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 3.5L10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  x:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
   del:'<svg width="17" height="17" viewBox="0 0 18 18" fill="none"><path d="M4 5h10M7.5 5V3.5h3V5M5.5 5l.7 9.5h5.6l.7-9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
 // 메뉴 나무. key가 있는 항목은 각자 따로 저장되는 할 일 목록이에요.
@@ -628,7 +685,7 @@ const ls = {
 };
 
 let tree = [];                 // [{id,text,done,children:[]}]
-let ui = Object.assign({collapsed:{}, hideDone:false, navClosed:{}}, ls.get(LS_UI)||{});
+let ui = Object.assign({collapsed:{}, hideDone:false, navClosed:{}, calView:false}, ls.get(LS_UI)||{});
 let addingTo = null, editing = null, undoState = null, toastTimer = null;
 let docRef = null, saveTimer = null, saving = false, dirty = false, loaded = false;
 
@@ -654,8 +711,12 @@ function syncParents(list=tree){ // a parent is done when all children are done
 /* ---------- render ---------- */
 function render(){
   const root = $('tree'); root.replaceChildren();
-  tree.forEach(n=>{ const el=renderNode(n); if(el) root.append(el); });
-  $('empty').hidden = !loaded || tree.length>0;
+  const cal=!!ui.calView;
+  root.hidden=cal; $('cal').hidden=!cal;
+  $('mode-list').setAttribute('aria-pressed',!cal); $('mode-cal').setAttribute('aria-pressed',cal);
+  document.querySelectorAll('.listonly').forEach(b=>b.hidden=cal);
+  if(cal) renderCal(); else tree.forEach(n=>{ const el=renderNode(n); if(el) root.append(el); });
+  $('empty').hidden = !loaded || tree.length>0 || cal;
   const s = tree.reduce((a,n)=>{const t=stats(n);a.all+=t.all;a.done+=t.done;return a},{all:0,done:0});
   $('sum').textContent = loaded ? (s.all ? `할 일 ${s.all}개 중 ${s.done}개 완료` : '비어 있음') : '불러오는 중…';
   $('hidedone').setAttribute('aria-pressed', ui.hideDone);
@@ -689,6 +750,7 @@ function renderNode(n){
     t.onclick=()=>{ editing=n.id; addingTo=null; render(); };
     row.append(t);
     if(hasKids){ const c=document.createElement('span'); c.className='cnt'; c.textContent=`${st.done}/${st.all}`; row.append(c); }
+    row.append(dateCtl(n));
     const act=document.createElement('div'); act.className='act';
     const add=document.createElement('button'); add.className='ib'; add.innerHTML=ICON.plus; add.setAttribute('aria-label','세부 할 일 추가');
     add.onclick=()=>{ addingTo = addingTo===n.id?null:n.id; delete ui.collapsed[n.id]; editing=null; render(); };
@@ -714,6 +776,116 @@ function renderNode(n){
   }
   return li;
 }
+
+/* ---------- 날짜 & 달력 ---------- */
+// 할 일마다 날짜(YYYY-MM-DD)를 붙일 수 있어요. 달력 보기에서는 날짜가 붙은 할 일을 그날 칸에 보여 줘요.
+const WD=['일','월','화','수','목','금','토'];
+const pad=x=>String(x).padStart(2,'0');
+const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parseYmd=s=>{ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
+const today=()=>ymd(new Date());
+const fmtDate=s=>{ const d=parseYmd(s); return `${d.getMonth()+1}/${d.getDate()} (${WD[d.getDay()]})`; };
+let calMonth=null, calSel=null, calFocus=false;  // 달력에서 보고 있는 달(그 달 1일)과 고른 날짜
+function dateCls(n){ if(!n.date) return ''; const t=today(); return n.date===t?'today':(!n.done&&n.date<t?'late':''); }
+function dateCtl(n){
+  const w=document.createElement('label'); w.className='dt '+(n.date?'set '+dateCls(n):'empty');
+  w.title=n.date?'날짜 바꾸기':'날짜 정하기';
+  w.innerHTML=ICON.cal; if(n.date) w.append(document.createTextNode(fmtDate(n.date)));
+  const inp=document.createElement('input'); inp.type='date'; inp.value=n.date||''; inp.setAttribute('aria-label',`'${n.text}' 날짜`);
+  inp.onclick=()=>{ try{ inp.showPicker(); }catch(e){} };
+  inp.onchange=()=>{ if(inp.value) n.date=inp.value; else delete n.date; commit(); };
+  w.append(inp); return w;
+}
+function collectDated(){ // {날짜: [{n,path}]}
+  const by={}, undated=[];
+  const walk=(list,path)=>list.forEach(n=>{
+    if(ui.hideDone && n.done) return;
+    if(n.date) (by[n.date]=by[n.date]||[]).push({n,path});
+    else if(!n.children.length && !n.done) undated.push({n,path});
+    walk(n.children,[...path,n.text]);
+  });
+  walk(tree,[]); return {by,undated};
+}
+function agendaItem({n,path},withRemove){
+  const row=document.createElement('div'); row.className='aitem'+(n.done?' done':'');
+  const ck=document.createElement('button'); ck.className='ck'; ck.setAttribute('role','checkbox'); ck.setAttribute('aria-checked',n.done); ck.setAttribute('aria-label','완료 표시');
+  if(n.done) ck.innerHTML=ICON.check;
+  ck.onclick=()=>{ setDone(n,!n.done); syncParents(); commit(); };
+  const tx=document.createElement('div'); tx.className='atx';
+  const b=document.createElement('b'); b.textContent=n.text; tx.append(b);
+  if(path.length){ const sm=document.createElement('small'); sm.textContent=path.join(' › '); tx.append(sm); }
+  row.append(ck,tx,dateCtl(n));
+  if(withRemove){ const x=document.createElement('button'); x.className='ib'; x.innerHTML=ICON.x; x.setAttribute('aria-label','날짜 빼기'); x.title='날짜 빼기';
+    x.onclick=()=>{ delete n.date; commit(); }; row.append(x); }
+  return row;
+}
+function renderCal(){
+  const box=$('cal'); box.replaceChildren();
+  const t=today();
+  if(!calSel) calSel=t;
+  if(!calMonth){ const d=parseYmd(calSel); calMonth=new Date(d.getFullYear(),d.getMonth(),1); }
+  const {by,undated}=collectDated();
+  const head=document.createElement('div'); head.className='calhead';
+  const h=document.createElement('h2'); h.textContent=`${calMonth.getFullYear()}년 ${calMonth.getMonth()+1}월`;
+  const mk=(html,label,fn)=>{ const b=document.createElement('button'); b.className='ib'; b.innerHTML=html; b.setAttribute('aria-label',label); b.onclick=fn; return b; };
+  const move=k=>{ calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()+k,1); render(); };
+  const tb=document.createElement('button'); tb.className='chip'; tb.textContent='오늘';
+  tb.onclick=()=>{ calSel=t; calMonth=null; render(); };
+  head.append(h, mk(ICON.prev,'이전 달',()=>move(-1)), tb, mk(ICON.next,'다음 달',()=>move(1)));
+  box.append(head);
+
+  const grid=document.createElement('div'); grid.className='cgrid';
+  WD.forEach((w,i)=>{ const c=document.createElement('div'); c.className='cwd'+(i===0?' sun':i===6?' sat':''); c.textContent=w; grid.append(c); });
+  const start=new Date(calMonth); start.setDate(1-start.getDay());
+  const weeks=Math.ceil((calMonth.getDay()+new Date(calMonth.getFullYear(),calMonth.getMonth()+1,0).getDate())/7);
+  for(let i=0;i<weeks*7;i++){
+    const d=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i), key=ymd(d), items=by[key]||[];
+    const c=document.createElement('button'); c.type='button';
+    c.className='cday'+(d.getMonth()!==calMonth.getMonth()?' out':'')+(key===t?' today':'')+(d.getDay()===0?' sun':d.getDay()===6?' sat':'');
+    c.setAttribute('aria-pressed',key===calSel);
+    c.setAttribute('aria-label',`${d.getMonth()+1}월 ${d.getDate()}일, 할 일 ${items.length}개`);
+    const num=document.createElement('span'); num.className='cnum'; num.textContent=d.getDate(); c.append(num);
+    const dots=document.createElement('span'); dots.className='cdots';
+    items.forEach(({n},j)=>{
+      const cls=n.done?'d':(key<t?'late':'');
+      if(j<3){ const p=document.createElement('span'); p.className='cpill '+cls; p.textContent=n.text; c.append(p); }
+      if(j<6){ const i2=document.createElement('i'); i2.className=cls; dots.append(i2); }
+    });
+    if(items.length>3){ const m=document.createElement('span'); m.className='cmore'; m.textContent=`+${items.length-3}개 더`; c.append(m); }
+    c.append(dots);
+    c.onclick=()=>{ calSel=key; if(d.getMonth()!==calMonth.getMonth()) calMonth=new Date(d.getFullYear(),d.getMonth(),1); render(); };
+    grid.append(c);
+  }
+  box.append(grid);
+
+  // 고른 날의 할 일
+  const ag=document.createElement('div'); ag.className='agenda';
+  const sd=parseYmd(calSel), list=by[calSel]||[];
+  const h3=document.createElement('h3'); h3.textContent=`${sd.getMonth()+1}월 ${sd.getDate()}일 ${WD[sd.getDay()]}요일`;
+  const sp=document.createElement('span'); sp.textContent=list.length?`할 일 ${list.length}개 · ${list.filter(x=>x.n.done).length}개 완료`:(calSel===t?'오늘':''); h3.append(sp);
+  ag.append(h3);
+  if(list.length) list.forEach(x=>ag.append(agendaItem(x,true)));
+  else { const e=document.createElement('div'); e.className='anone'; e.textContent='이 날엔 할 일이 없어요. 아래에 적거나, 날짜 없는 할 일에 날짜를 붙여 보세요.'; ag.append(e); }
+  const f=document.createElement('form');
+  const inp=document.createElement('input'); inp.type='text'; inp.placeholder='이 날에 할 일 추가'; inp.setAttribute('enterkeyhint','done'); inp.autocomplete='off';
+  if(calFocus){ inp.setAttribute('data-focus',''); calFocus=false; }
+  const b=document.createElement('button'); b.className='btn'; b.type='submit'; b.textContent='추가';
+  f.onsubmit=e=>{ e.preventDefault(); const v=inp.value.trim(); if(!v) return;
+    tree.push({id:uid(),text:v,done:false,date:calSel,children:[]}); calFocus=true; commit(); };
+  f.append(inp,b); ag.append(f);
+  box.append(ag);
+
+  // 날짜 없는 할 일: 날짜를 붙이면 달력에 나타나요
+  if(undated.length){
+    const det=document.createElement('details'); det.className='undated agenda'; det.open=!!ui.undatedOpen;
+    det.ontoggle=()=>{ ui.undatedOpen=det.open; ls.set(LS_UI,ui); };
+    const su=document.createElement('summary'); su.textContent=`날짜 없는 할 일 ${undated.length}개 · 날짜를 붙이면 달력에 나와요`;
+    det.append(su); undated.forEach(x=>det.append(agendaItem(x,false)));
+    box.append(det);
+  }
+}
+$('mode-list').onclick=()=>{ ui.calView=false; ls.set(LS_UI,ui); render(); };
+$('mode-cal').onclick=()=>{ ui.calView=true; ls.set(LS_UI,ui); render(); };
 
 /* ---------- actions ---------- */
 function remove(id){
