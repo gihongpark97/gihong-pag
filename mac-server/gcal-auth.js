@@ -3,9 +3,7 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { FILES, oauthClient, writeSecret } from './common.js';
-
-const SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+import { FILES, oauthClient, writeSecret, SCOPES as SCOPE } from './common.js';
 const { id, secret } = oauthClient();
 const verifier = crypto.randomBytes(48).toString('base64url');
 const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');

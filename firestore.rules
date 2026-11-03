@@ -40,6 +40,19 @@ service cloud.firestore {
       allow read: if can(list);
       allow write: if isAdmin();
     }
+    // 사이트 → 구글 캘린더 추가 요청: 그 목록 권한이 있는 사람이 남기면, 맥 서버가 구글에 만들고 지워요.
+    match /shared/home/gcalq/{id} {
+      allow create: if signedIn() && can(request.resource.data.list)
+        && request.resource.data.keys().hasOnly(['list', 'calendarId', 'title', 'date', 'time', 'by', 'at'])
+        && request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 200
+        && request.resource.data.calendarId is string
+        && request.resource.data.date is string && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && (!('time' in request.resource.data) || (request.resource.data.time is string && request.resource.data.time.matches('^[0-9]{2}:[0-9]{2}$')))
+        && request.resource.data.by == request.auth.uid;
+      // 보낸 사람은 자기 요청(실패 여부)을 볼 수 있어요.
+      allow read: if isAdmin() || (signedIn() && resource.data.by == request.auth.uid);
+      allow delete: if isAdmin() || (signedIn() && resource.data.by == request.auth.uid);
+    }
     // 대출계산기(loan), 결혼 비용(wedding-cost), 자산관리(asset-status, asset-ledger, asset-goals), 신혼 가전(appliances)
     match /shared/home/pages/{page} {
       allow read, write: if can(page);

@@ -32,3 +32,47 @@ export function oauthClient() {
 }
 
 export const log = (...a) => console.log(new Date().toISOString(), ...a);
+
+// 구글 권한: 캘린더 목록 읽기 + 일정 만들기
+export const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events';
+
+// 갱신 토큰으로 1시간짜리 접근 토큰을 받아요. 오래 도는 프로세스를 위해 잠깐 기억해 둬요.
+let tokCache = { t: '', exp: 0 };
+export async function accessToken() {
+  if (tokCache.t && tokCache.exp > Date.now() + 60000) return tokCache.t;
+  const { id, secret } = oauthClient();
+  const { refresh_token } = readJson(FILES.token, '구글 갱신 토큰(먼저 npm run auth)');
+  const r = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ client_id: id, client_secret: secret, refresh_token, grant_type: 'refresh_token' }),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.access_token) {
+    if (j.error === 'invalid_grant') throw new Error('구글 연결이 끊겼어요(invalid_grant). npm run auth 를 다시 해 주세요.');
+    throw new Error('구글 토큰 갱신 실패: ' + JSON.stringify(j));
+  }
+  tokCache = { t: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000 };
+  return j.access_token;
+}
+
+export async function gapi(path, opts = {}) {
+  const token = await accessToken();
+  const r = await fetch('https://www.googleapis.com/calendar/v3' + path, {
+    ...opts, headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+  });
+  if (!r.ok) {
+    const body = await r.text();
+    if (r.status === 403) throw new Error('구글 캘린더 권한이 없어요(403). 일정 추가 권한을 받으려면 npm run auth 를 다시 해 주세요: ' + body.slice(0, 200));
+    throw new Error(`구글 API ${r.status}: ${body.slice(0, 300)}`);
+  }
+  return r.status === 204 ? {} : r.json();
+}
+
+let app = null;
+export async function firestore() {
+  const { initializeApp, cert } = await import('firebase-admin/app');
+  const { getFirestore } = await import('firebase-admin/firestore');
+  if (!app) app = initializeApp({ credential: cert(readJson(FILES.serviceAccount, 'Firebase 서비스 계정 키')) });
+  return getFirestore(app);
+}
