@@ -165,7 +165,7 @@ function bar(){
   const gi=el('span','gcalg','G'); st.append(gi);
   let msg='구글 캘린더';
   if(S.syncing) msg+=' · 맞추는 중…';
-  else if(S.data&&S.data.syncedAt) msg+=` · ${ago(S.data.syncedAt)} 맞춤`;
+  else if(S.data&&S.data.syncedAt) msg+=` · ${ago(S.data.syncedAt)} 맞춤`+(S.data.by==='mac'?' (맥 서버)':'');
   else if(isAdmin) msg+=S.conf&&S.conf.clientId?' · 아직 연결 안 됨':' · 설정이 필요해요';
   st.append(document.createTextNode(msg)); line.append(st);
   if(isAdmin){
@@ -229,6 +229,7 @@ function settings(){
    '‘OAuth 동의 화면’을 외부(External)로 만들고, 테스트 사용자에 내 구글 계정(gmail)을 추가해요.',
    '‘사용자 인증 정보 › 사용자 인증 정보 만들기 › OAuth 클라이언트 ID’에서 웹 애플리케이션을 고르고, 승인된 자바스크립트 원본에 https://gihong-pag.com 과 https://www.gihong-pag.com 을 넣어요.',
    '만들어진 클라이언트 ID를 위 칸에 붙여 넣고 저장 → ‘구글 연결’을 눌러 로그인해요. (확인되지 않은 앱 경고가 나오면 ‘고급 › 이동’을 눌러요.)',
+   '맥 서버(저장소의 mac-server 폴더)를 켜 두면 구글 연결 없이도 5분마다 저절로 맞춰요.',
    '구글 연결은 한 시간쯤 유지돼요. 끊기면 ‘구글 연결’을 한 번 더 누르면 돼요. 연결된 동안에는 5분마다 저절로 맞춰요.'
   ].forEach(t=>ol.append(el('li',null,t)));
   help.append(ol); box.append(help);

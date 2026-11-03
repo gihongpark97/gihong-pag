@@ -1,0 +1,15 @@
+{
+  "name": "gihong-mac-server",
+  "private": true,
+  "description": "맥에서 늘 돌아가는 기홍이 홈페이지 작업들 (구글 캘린더 → Firestore 동기화)",
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "auth": "node gcal-auth.js",
+    "sync": "node gcal-sync.js",
+    "check": "node gcal-sync.js --dry-run"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.7.0"
+  }
+}
