@@ -1,0 +1,8 @@
+node_modules/
+*.json.local
+# 비밀 파일은 저장소가 아니라 ~/.gihong-server 에 둬요. 혹시 잘못 복사돼도 올라가지 않게 막아요.
+google-oauth-client.json
+google-token.json
+firebase-service-account.json
+client_secret_*.json
+*-firebase-adminsdk-*.json
