@@ -91,7 +91,7 @@ function render(){
  if(!root||!state) return;
  if(cur>=state.list.length) cur=state.list.length-1;
  const l=state.list[cur];
- let h=`<div class="rc"><div class="lhead"><div><div class="crumb">부동산</div><h1>매물 입지 체크리스트</h1>
+ let h=`<div class="rc"><div class="lhead"><div><div class="crumb">신혼 › 부동산</div><h1>매물 입지 체크리스트</h1>
   <div class="sum">매물을 골라 항목마다 1~5점을 탭하면 가중치를 반영한 100점 점수가 나와요. 예산·대출 조건은 점수와 따로 통과 여부만 봐요.</div></div>
   <div class="acct"><div class="sync" id="rcsync"></div></div></div>
   <div class="rc-rank" id="rc-rank" role="tablist" aria-label="매물"></div>

@@ -189,7 +189,7 @@ function render(){
   ginput.onkeydown=e=>{ if(e.key==='Enter'&&!e.isComposing){ e.preventDefault(); addG(); } };
   root.replaceChildren(...[
     el('div',{class:'lhead'},
-      el('div',{},el('div',{class:'crumb'},'주식'),el('h1',{},'관심 뉴스'),el('div',{class:'sum'},`분야 ${state.groups.length}개 · 키워드 ${total}개`)),
+      el('div',{},el('div',{class:'crumb'},'기홍프로젝트 › 주식'),el('h1',{},'관심 뉴스'),el('div',{class:'sum'},`분야 ${state.groups.length}개 · 키워드 ${total}개`)),
       el('div',{class:'acct'},el('div',{class:'sync',id:'ssync'}))),
     el('div',{class:'scols'},
       el('div',{class:'sleft'},...state.groups.map(groupCard),
