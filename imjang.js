@@ -179,7 +179,7 @@ const $=id=>root.querySelector('#'+id);
 function counts(h){ let done=0,key=0; DATA.forEach(([,items],si)=>items.forEach((it,ii)=>{ if(h.c[si+'-'+ii]){ done++; if(it[1]) key++; } })); return {done,key}; }
 
 function render(){
- let h=`<div class="im"><div class="lhead"><div><div class="crumb">부동산</div><h1>아파트 임장 체크리스트</h1>
+ let h=`<div class="im"><div class="lhead"><div><div class="crumb">신혼 › 부동산</div><h1>아파트 임장 체크리스트</h1>
   <div class="sum">서울·경기 구축 실거주 기준. 본 집마다 따로 저장되니 현장에서 탭만 하세요.</div></div>
   <div class="acct"><div class="sync" id="imsync"></div></div></div>
   <div class="im-houses" id="im-houses" role="tablist" aria-label="본 집"></div>

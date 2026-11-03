@@ -270,7 +270,7 @@ function renderNow(){
   const tabs=el('div',{class:'ltabs',role:'tablist'},...Object.entries(TABS).map(([k,v])=>el('button',{type:'button',role:'tab','aria-selected':String(tab===k),class:'ltab',onclick:()=>{ tab=k; try{ localStorage.setItem('hong.loan.tab',k); }catch(e){} render(); }},v)));
   if(tab==='price'){
     root.replaceChildren(el('div',{class:'lhead'},
-      el('div',{},el('div',{class:'crumb'},'대출계산기'),el('h1',{},'시세 조회'),el('div',{class:'sum'},'아파트 이름으로 최근 실거래가와 KB시세 보기')),
+      el('div',{},el('div',{class:'crumb'},'신혼 › 부동산 › 대출계산기'),el('h1',{},'시세 조회'),el('div',{class:'sum'},'아파트 이름으로 최근 실거래가와 KB시세 보기')),
       el('div',{class:'acct'},el('div',{class:'sync',id:'loansync'}))),tabs,
       window.AptPrice?window.AptPrice.view({get:()=>state.settings.price,save,
         usePrice:(p,what,isKb)=>{ state.settings.quick[isKb?'kb':'price']=p; tab='bog'; try{ localStorage.setItem('hong.loan.tab',tab); }catch(e){} save(); render(); flash(`${what} ${eok(p)}을 ${isKb?'KB시세':'집값'}에 넣었어요.`); }})
@@ -280,13 +280,13 @@ function renderNow(){
   }
   if(tab!=='cmp'){
     root.replaceChildren(el('div',{class:'lhead'},
-      el('div',{},el('div',{class:'crumb'},'대출계산기'),el('h1',{},TABS[tab]),el('div',{class:'sum'},tab==='bog'?'주택금융공사 정책 대출 · 고정금리':'주택도시기금 정책 대출 · 소득별 금리')),
+      el('div',{},el('div',{class:'crumb'},'신혼 › 부동산 › 대출계산기'),el('h1',{},TABS[tab]),el('div',{class:'sum'},tab==='bog'?'주택금융공사 정책 대출 · 고정금리':'주택도시기금 정책 대출 · 소득별 금리')),
       el('div',{class:'acct'},el('div',{class:'sync',id:'loansync'}))),tabs,quickView(tab,S,R));
     setStatus(ref?'모든 기기에 저장됨':(window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.apiKey?'불러오는 중…':'이 기기에만 저장됨'));
     return;
   }
   const top=el('div',{class:'lhead'},
-    el('div',{},el('div',{class:'crumb'},'대출계산기'),el('h1',{},'매물별 대출 비교'),
+    el('div',{},el('div',{class:'crumb'},'신혼 › 부동산 › 대출계산기'),el('h1',{},'매물별 대출 비교'),
       el('div',{class:'sum'},`심사 소득 ${eok(R.income)} · 보유 현금 ${eok(S.base.cash)} · ${S.base.term}년 원리금균등`)),
     el('div',{class:'acct'},el('div',{class:'sync',id:'loansync'})));
 

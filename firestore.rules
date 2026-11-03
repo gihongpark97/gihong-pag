@@ -25,7 +25,7 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // 할 일 목록: 문서 이름이 메뉴 key예요. 기홍 목록만 예전 이름 'tree'를 써요.
+    // 할 일 목록: 문서 이름이 메뉴 key예요(common, work-gihong, work-jiyeon, gihong, jiyeon, wedding-*). 기홍 목록만 예전 이름 'tree'를 써요.
     match /shared/home/lists/{list} {
       allow read, write: if can(list) || (list == 'tree' && can('gihong'));
     }

@@ -559,16 +559,16 @@ body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--l
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=20261028c"></script>
-<script src="aptprice.js?v=20261028c"></script>
-<script src="loan.js?v=20261028c"></script>
-<script src="wedding.js?v=20261028c"></script>
-<script src="realty.js?v=20261028c"></script>
-<script src="imjang.js?v=20261028c"></script>
-<script src="asset.js?v=20261028c"></script>
-<script src="appliance.js?v=20261028c"></script>
-<script src="stocks.js?v=20261028c"></script>
-<script src="admin.js?v=20261028c"></script>
+<script src="firebase-config.js?v=20261103a"></script>
+<script src="aptprice.js?v=20261103a"></script>
+<script src="loan.js?v=20261103a"></script>
+<script src="wedding.js?v=20261103a"></script>
+<script src="realty.js?v=20261103a"></script>
+<script src="imjang.js?v=20261103a"></script>
+<script src="asset.js?v=20261103a"></script>
+<script src="appliance.js?v=20261103a"></script>
+<script src="stocks.js?v=20261103a"></script>
+<script src="admin.js?v=20261103a"></script>
 <script>
 const ICON = {
   chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -579,31 +579,36 @@ const ICON = {
 // 메뉴 나무. key가 있는 항목은 각자 따로 저장되는 할 일 목록이에요.
 const MENU=[
   {label:'체크리스트', children:[
-    {label:'해야할일', children:[
-      {key:'gihong', label:'기홍', doc:'tree', cache:'hongtodo.cache'},  // 첫 버전 데이터를 그대로 이어서 써요
-      {key:'jiyeon', label:'지연'},
+    {key:'common', label:'공통업무', title:'공통업무'},
+    {label:'회사업무', children:[
+      {key:'work-gihong', label:'기홍', title:'기홍의 회사업무'},
+      {key:'work-jiyeon', label:'지연', title:'지연의 회사업무'},
+    ]},
+    {label:'개인업무', children:[
+      {key:'gihong', label:'기홍', title:'기홍의 개인업무', doc:'tree', cache:'hongtodo.cache'},  // 예전 '해야할일 › 기홍' 목록을 그대로 이어서 써요
+      {key:'jiyeon', label:'지연', title:'지연의 개인업무'},  // 예전 '해야할일 › 지연' 목록
     ]},
   ]},
-  {label:'부동산', children:[
-    {key:'imjang', label:'임장 체크리스트', view:'imjang'},
-    {key:'realty-check', label:'입지 체크리스트', view:'realtyCheck'},
-    {key:'loan', label:'대출계산기', view:'loan'},
+  {label:'자산관리', children:[
+    {key:'asset-status', label:'자산현황', title:'자산 현황', view:'assetStatus'},
+    {key:'asset-ledger', label:'가계부', view:'assetLedger'},
+    {key:'asset-goals', label:'공동목표', title:'공동 목표', view:'assetGoals'},
+  ]},
+  {label:'신혼', children:[
+    {label:'부동산', children:[
+      {key:'imjang', label:'임장 체크리스트', view:'imjang'},
+      {key:'realty-check', label:'입지 체크리스트', view:'realtyCheck'},
+      {key:'loan', label:'대출계산기', view:'loan'},
+    ]},
+    {key:'appliances', label:'가전/가구', title:'가전/가구 리스트', view:'appliances'},
   ]},
   {label:'결혼', children:[
-    {key:'wedding-check', label:'준비 체크', title:'결혼 준비 체크', seed:'check'},
-    {key:'wedding-dday', label:'전날 준비물', title:'결혼식 전날 준비물', seed:'dday'},
-    {key:'wedding-cost', label:'비용 정리', view:'weddingCost'},
+    {key:'wedding-check', label:'결혼 준비 체크', title:'결혼 준비 체크', seed:'check'},
+    {key:'wedding-cost', label:'비용정리', title:'비용 정리', view:'weddingCost'},
+    {key:'wedding-dday', label:'전날 준비물', title:'결혼식 전날 준비물', seed:'dday'},  // 트리에는 없지만 데이터가 있어 남겨 뒀어요
   ]},
-  {label:'자산관리', children:[
-    {key:'asset-status', label:'자산 현황', view:'assetStatus'},
-    {key:'asset-ledger', label:'가계부', view:'assetLedger'},
-    {key:'asset-goals', label:'공동 목표', view:'assetGoals'},
-  ]},
-  {label:'신혼 가전', children:[
-    {key:'appliances', label:'가전 리스트', title:'신혼 가전 리스트', view:'appliances'},
-  ]},
-  {label:'주식', children:[
-    {key:'stocks', label:'관심 뉴스', view:'stocks'},
+  {label:'기홍프로젝트', children:[
+    {key:'stocks', label:'주식', title:'관심 뉴스', view:'stocks'},
   ]},
   {label:'사용자 관리', key:'admin', view:'admin', adminOnly:true},  // 관리자에게만 보여요
 ];
