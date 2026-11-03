@@ -34,6 +34,12 @@ service cloud.firestore {
       allow read: if true;
       allow write: if can('stocks');
     }
+    // 구글 캘린더 일정: 관리자 기기가 구글에서 가져와 목록별(common, work-gihong, work-jiyeon, gihong, jiyeon)로 넣어 둬요.
+    // 그 목록을 볼 수 있는 사람만 읽고, 쓰기와 설정(config)은 관리자만 해요.
+    match /shared/home/gcal/{list} {
+      allow read: if can(list);
+      allow write: if isAdmin();
+    }
     // 대출계산기(loan), 결혼 비용(wedding-cost), 자산관리(asset-status, asset-ledger, asset-goals), 신혼 가전(appliances)
     match /shared/home/pages/{page} {
       allow read, write: if can(page);

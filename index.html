@@ -98,6 +98,29 @@ ul.tree{list-style:none;margin:0;padding:0}
 .undated{margin-top:14px}
 .undated summary{cursor:pointer;color:var(--muted);font-size:.875rem;padding:6px 2px}
 .undated .aitem{padding-left:4px}
+/* 구글 캘린더 일정 */
+.cpill.ev{background:var(--surface);color:var(--fg);border:1px solid var(--line);border-left:3px solid var(--blue);padding-left:4px}
+.gcal{margin-bottom:8px}
+.gcalbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.gcalst{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);margin-right:auto}
+.gcalg{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-size:.68rem;font-weight:700;color:#fff;background:#4285f4}
+.chip.on{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:600}
+.gcalerr{font-size:.8rem;color:var(--danger);margin:6px 2px 0}
+.gcalset{margin-top:8px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:10px}
+.gcalset h4{margin:4px 0 0;font-size:.9rem}
+.gcalid{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.gcalid label{width:100%;font-size:.8rem;color:var(--muted)}.gcalid input{flex:1;min-width:0}
+.gcalhint{font-size:.8rem;color:var(--muted);margin:0}
+.gcalcals{display:grid;gap:2px}
+.gcalcal{display:flex;align-items:center;gap:8px;min-height:40px;border-top:1px solid var(--line)}.gcalcal:first-child{border-top:0}
+.gcalnm{flex:1;min-width:0;overflow-wrap:anywhere;font-size:.9rem}
+.gcalcal select{max-width:46%;font-size:.85rem}
+.evsw{flex:none;width:10px;height:10px;border-radius:3px;background:var(--blue)}
+.gcalhelp summary{cursor:pointer;font-size:.85rem;color:var(--muted)}
+.gcalhelp ol{margin:6px 0 0;padding-left:20px;font-size:.82rem;color:var(--muted);display:grid;gap:4px}
+a.aitem.ev{color:inherit;text-decoration:none}
+.agenda a.aitem+div.aitem{border-top:1px solid var(--line)}
+.aitem.ev .evsw{margin:0 6px 0 7px}
+.aitem.ev .evtime{flex:none;font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums;padding-right:4px}
 .aitem .dt.empty{display:inline-flex;border:1px dashed var(--line)}.aitem .dt.empty::after{content:"날짜 정하기"}
 ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(--line);margin-left:15px}
 .row{display:flex;align-items:center;gap:4px;min-height:44px;border-radius:8px;padding-right:4px}
@@ -633,16 +656,17 @@ body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--l
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="firebase-config.js?v=20261103b"></script>
-<script src="aptprice.js?v=20261103b"></script>
-<script src="loan.js?v=20261103b"></script>
-<script src="wedding.js?v=20261103b"></script>
-<script src="realty.js?v=20261103b"></script>
-<script src="imjang.js?v=20261103b"></script>
-<script src="asset.js?v=20261103b"></script>
-<script src="appliance.js?v=20261103b"></script>
-<script src="stocks.js?v=20261103b"></script>
-<script src="admin.js?v=20261103b"></script>
+<script src="firebase-config.js?v=20261103c"></script>
+<script src="aptprice.js?v=20261103c"></script>
+<script src="loan.js?v=20261103c"></script>
+<script src="wedding.js?v=20261103c"></script>
+<script src="realty.js?v=20261103c"></script>
+<script src="imjang.js?v=20261103c"></script>
+<script src="asset.js?v=20261103c"></script>
+<script src="appliance.js?v=20261103c"></script>
+<script src="stocks.js?v=20261103c"></script>
+<script src="admin.js?v=20261103c"></script>
+<script src="gcal.js?v=20261103c"></script>
 <script>
 const ICON = {
   chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -846,6 +870,7 @@ function renderCal(){
   if(!calSel) calSel=t;
   if(!calMonth){ const d=parseYmd(calSel); calMonth=new Date(d.getFullYear(),d.getMonth(),1); }
   const {by,undated}=collectDated();
+  const gev=window.GCAL?GCAL.byDay():{};  // 구글 캘린더 일정(읽기 전용)
   const head=document.createElement('div'); head.className='calhead';
   const h=document.createElement('h2'); h.textContent=`${calMonth.getFullYear()}년 ${calMonth.getMonth()+1}월`;
   const mk=(html,label,fn)=>{ const b=document.createElement('button'); b.className='ib'; b.innerHTML=html; b.setAttribute('aria-label',label); b.onclick=fn; return b; };
@@ -854,25 +879,28 @@ function renderCal(){
   tb.onclick=()=>{ calSel=t; calMonth=null; render(); };
   head.append(h, mk(ICON.prev,'이전 달',()=>move(-1)), tb, mk(ICON.next,'다음 달',()=>move(1)));
   box.append(head);
+  const gb=window.GCAL&&GCAL.bar(); if(gb) box.append(gb);
 
   const grid=document.createElement('div'); grid.className='cgrid';
   WD.forEach((w,i)=>{ const c=document.createElement('div'); c.className='cwd'+(i===0?' sun':i===6?' sat':''); c.textContent=w; grid.append(c); });
   const start=new Date(calMonth); start.setDate(1-start.getDay());
   const weeks=Math.ceil((calMonth.getDay()+new Date(calMonth.getFullYear(),calMonth.getMonth()+1,0).getDate())/7);
   for(let i=0;i<weeks*7;i++){
-    const d=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i), key=ymd(d), items=by[key]||[];
+    const d=new Date(start.getFullYear(),start.getMonth(),start.getDate()+i), key=ymd(d), items=by[key]||[], evs=gev[key]||[];
     const c=document.createElement('button'); c.type='button';
     c.className='cday'+(d.getMonth()!==calMonth.getMonth()?' out':'')+(key===t?' today':'')+(d.getDay()===0?' sun':d.getDay()===6?' sat':'');
     c.setAttribute('aria-pressed',key===calSel);
-    c.setAttribute('aria-label',`${d.getMonth()+1}월 ${d.getDate()}일, 할 일 ${items.length}개`);
+    c.setAttribute('aria-label',`${d.getMonth()+1}월 ${d.getDate()}일, 할 일 ${items.length}개`+(evs.length?`, 일정 ${evs.length}개`:''));
     const num=document.createElement('span'); num.className='cnum'; num.textContent=d.getDate(); c.append(num);
     const dots=document.createElement('span'); dots.className='cdots';
+    evs.forEach((x,j)=>{ if(j<3) c.append(GCAL.pill(x)); if(j<6) dots.append(GCAL.dot(x)); });
     items.forEach(({n},j)=>{
-      const cls=n.done?'d':(key<t?'late':'');
-      if(j<3){ const p=document.createElement('span'); p.className='cpill '+cls; p.textContent=n.text; c.append(p); }
-      if(j<6){ const i2=document.createElement('i'); i2.className=cls; dots.append(i2); }
+      const cls=n.done?'d':(key<t?'late':''), k=j+evs.length;
+      if(k<3){ const p=document.createElement('span'); p.className='cpill '+cls; p.textContent=n.text; c.append(p); }
+      if(k<6){ const i2=document.createElement('i'); i2.className=cls; dots.append(i2); }
     });
-    if(items.length>3){ const m=document.createElement('span'); m.className='cmore'; m.textContent=`+${items.length-3}개 더`; c.append(m); }
+    const total=items.length+evs.length;
+    if(total>3){ const m=document.createElement('span'); m.className='cmore'; m.textContent=`+${total-3}개 더`; c.append(m); }
     c.append(dots);
     c.onclick=()=>{ calSel=key; if(d.getMonth()!==calMonth.getMonth()) calMonth=new Date(d.getFullYear(),d.getMonth(),1); render(); };
     grid.append(c);
@@ -881,12 +909,13 @@ function renderCal(){
 
   // 고른 날의 할 일
   const ag=document.createElement('div'); ag.className='agenda';
-  const sd=parseYmd(calSel), list=by[calSel]||[];
+  const sd=parseYmd(calSel), list=by[calSel]||[], elist=gev[calSel]||[];
   const h3=document.createElement('h3'); h3.textContent=`${sd.getMonth()+1}월 ${sd.getDate()}일 ${WD[sd.getDay()]}요일`;
-  const sp=document.createElement('span'); sp.textContent=list.length?`할 일 ${list.length}개 · ${list.filter(x=>x.n.done).length}개 완료`:(calSel===t?'오늘':''); h3.append(sp);
+  const sp=document.createElement('span'); sp.textContent=[elist.length?`일정 ${elist.length}개`:'', list.length?`할 일 ${list.length}개 · ${list.filter(x=>x.n.done).length}개 완료`:''].filter(Boolean).join(' · ')||(calSel===t?'오늘':''); h3.append(sp);
   ag.append(h3);
+  elist.forEach(x=>ag.append(GCAL.agendaRow(x)));
   if(list.length) list.forEach(x=>ag.append(agendaItem(x,true)));
-  else { const e=document.createElement('div'); e.className='anone'; e.textContent='이 날엔 할 일이 없어요. 아래에 적거나, 날짜 없는 할 일에 날짜를 붙여 보세요.'; ag.append(e); }
+  else if(!elist.length){ const e=document.createElement('div'); e.className='anone'; e.textContent='이 날엔 할 일이 없어요. 아래에 적거나, 날짜 없는 할 일에 날짜를 붙여 보세요.'; ag.append(e); }
   const f=document.createElement('form');
   const inp=document.createElement('input'); inp.type='text'; inp.placeholder='이 날에 할 일 추가'; inp.setAttribute('enterkeyhint','done'); inp.autocomplete='off';
   if(calFocus){ inp.setAttribute('data-focus',''); calFocus=false; }
@@ -1000,6 +1029,7 @@ async function openList(key,force){
   if(current && LISTS[current].view){ const V=(window.VIEWS||{})[LISTS[current].view]; V && V.close(); }
   current=key; editing=null; addingTo=null; $('noaccess').hidden=true;
   const L=LISTS[key];
+  window.GCAL && GCAL.open(L.view?null:key, onGcal);
   try{ localStorage.setItem('hong.last',key); }catch(e){}
   $('todoview').hidden=!!L.view; $('loanview').hidden=!L.view;
   if(L.view){ if(unsub){ unsub(); unsub=null; } docRef=null; document.title=`${L.title||L.label} · 기홍이 홈페이지`; renderNav(); window.VIEWS[L.view].open($('loanview')); return; }
@@ -1010,12 +1040,20 @@ async function openList(key,force){
   loaded=true; render(); renderNav();
   if(fs && userId) watch(); else if(!fs) setSync('이 기기에만 저장됨');
 }
+// 구글 캘린더 일정이 바뀌면 달력만 다시 그려요(달력 칸에 무언가 적는 중이면 기다려요).
+function onGcal(){
+  if(!ui.calView || editing!==null || addingTo!==null) return;
+  const a=document.activeElement; if(a && a.tagName==='INPUT' && a.type==='text' && $('cal').contains(a) && a.value) return;
+  render();
+}
 function noAccess(){
+  window.GCAL && GCAL.open(null);
   if(current && LISTS[current].view){ const V=(window.VIEWS||{})[LISTS[current].view]; V && V.close(); }
   if(unsub){ unsub(); unsub=null; } docRef=null; current=null;
   $('todoview').hidden=true; $('loanview').hidden=true; $('noaccess').hidden=false; renderNav();
 }
 window.getDb=()=>({fs,userId});
+window.amAdmin=()=>!!me.admin;
 window.addEventListener('hashchange',()=>openList(location.hash.slice(1)));
 
 /* ---------- 화면 크기 ---------- */
