@@ -13,7 +13,7 @@ const API='https://www.googleapis.com/calendar/v3';
 const LS_TOK='hong.gcal.token';
 const SYNC_EVERY=5*60*1000;
 const S={key:null,unsub:null,data:null,denied:false,onChange:null,conf:null,confUnsub:null,
-  token:null,tokenExp:0,tc:null,tcFor:'',syncing:false,err:'',calList:null,timer:null,showSet:false,memo:null,memoFor:null};
+  token:null,tokenExp:0,idDraft:null,tc:null,tcFor:'',syncing:false,err:'',calList:null,timer:null,showSet:false,memo:null,memoFor:null};
 
 const env=()=>(window.getDb?window.getDb():{});
 const admin=()=>!!(window.amAdmin&&window.amAdmin());
@@ -187,12 +187,15 @@ function settings(){
   // 1) OAuth 클라이언트 ID
   const f=el('form','gcalid');
   const lab=el('label',null,'OAuth 클라이언트 ID');
-  const inp=el('input'); inp.type='text'; inp.placeholder='123456-abc.apps.googleusercontent.com'; inp.value=(S.conf&&S.conf.clientId)||''; inp.autocomplete='off'; inp.spellcheck=false;
+  const inp=el('input'); inp.type='text'; inp.placeholder='123456-abc.apps.googleusercontent.com'; inp.value=S.idDraft!=null?S.idDraft:((S.conf&&S.conf.clientId)||''); inp.oninput=()=>{ S.idDraft=inp.value; }; inp.autocomplete='off'; inp.spellcheck=false;
   const sv=el('button','btn','저장'); sv.type='submit';
   f.append(lab,inp,sv);
-  f.onsubmit=async e=>{ e.preventDefault(); const v=inp.value.trim();
-    if(v&&!/\.apps\.googleusercontent\.com$/.test(v)){ S.err='클라이언트 ID는 ….apps.googleusercontent.com 으로 끝나요.'; changed(); return; }
-    try{ await col().doc('config').set({clientId:v},{merge:true}); S.err=''; }catch(err){ S.err='설정을 저장하지 못했어요. Firestore 규칙을 확인해 주세요.'; changed(); } };
+  f.onsubmit=async e=>{ e.preventDefault(); S.idDraft=inp.value;
+    // 앞뒤 공백이나 JSON 통째로 붙여 넣어도 클라이언트 ID 부분만 찾아 써요.
+    const m=inp.value.match(/[\w-]+\.apps\.googleusercontent\.com/), v=m?m[0]:inp.value.trim();
+    if(!m){ S.err=/^GOCSPX-/.test(v)?'이건 클라이언트 보안 비밀번호예요. 그 위에 있는 클라이언트 ID(….apps.googleusercontent.com)를 넣어 주세요.':'클라이언트 ID는 ….apps.googleusercontent.com 으로 끝나요.'; changed(); return; }
+    try{ await col().doc('config').set({clientId:v},{merge:true}); S.err=''; S.idDraft=null; changed(); }
+    catch(err){ S.err=err&&err.code==='permission-denied'?'저장이 막혔어요. Firebase 콘솔에서 새 Firestore 규칙을 게시해 주세요.':'설정을 저장하지 못했어요. 인터넷 연결을 확인해 주세요.'; changed(); } };
   box.append(f);
   // 2) 가져올 캘린더
   const h=el('h4',null,'가져올 캘린더'); box.append(h);
