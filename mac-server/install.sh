@@ -5,13 +5,16 @@
 set -euo pipefail
 LABEL="com.gihong-pag.gcal-sync"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+PUSH="com.gihong-pag.gcal-push"
+PUSHPLIST="$HOME/Library/LaunchAgents/$PUSH.plist"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 DATA="${GIHONG_SERVER_DIR:-$HOME/.gihong-server}"
 INTERVAL="${SYNC_INTERVAL:-300}"   # 초. 기본 5분.
 
 if [[ "${1:-}" == "--uninstall" ]]; then
   launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-  rm -f "$PLIST"
+  launchctl bootout "gui/$(id -u)/$PUSH" 2>/dev/null || true
+  rm -f "$PLIST" "$PUSHPLIST"
   echo "자동 실행을 껐어요. (비밀 파일은 $DATA 에 그대로 있어요)"
   exit 0
 fi
@@ -57,7 +60,34 @@ PL
 
 launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$PLIST"
+
+# 사이트에서 추가한 일정을 구글 캘린더에 바로 만드는 프로그램(늘 켜 둠)
+cat > "$PUSHPLIST" <<PL
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>$PUSH</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$NODE</string>
+    <string>$DIR/gcal-push.js</string>
+  </array>
+  <key>WorkingDirectory</key><string>$DIR</string>
+  <key>EnvironmentVariables</key>
+  <dict><key>GIHONG_SERVER_DIR</key><string>$DATA</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>30</integer>
+  <key>StandardOutPath</key><string>$DATA/logs/gcal-push.log</string>
+  <key>StandardErrorPath</key><string>$DATA/logs/gcal-push.log</string>
+</dict>
+</plist>
+PL
+launchctl bootout "gui/$(id -u)/$PUSH" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$PUSHPLIST"
 echo
 echo "✅ 등록했어요. $((INTERVAL/60))분마다 구글 캘린더를 맞춰요."
-echo "   기록 보기: tail -f $DATA/logs/gcal-sync.log"
+echo "   사이트에서 추가한 일정은 몇 초 안에 구글 캘린더에 들어가요."
+echo "   기록 보기: tail -f $DATA/logs/gcal-sync.log $DATA/logs/gcal-push.log"
 echo "   지금 바로: launchctl kickstart gui/$(id -u)/$LABEL"

@@ -13,11 +13,12 @@ const API='https://www.googleapis.com/calendar/v3';
 const LS_TOK='hong.gcal.token';
 const SYNC_EVERY=5*60*1000;
 const S={key:null,unsub:null,data:null,denied:false,onChange:null,conf:null,confUnsub:null,
-  token:null,tokenExp:0,idDraft:null,tc:null,tcFor:'',syncing:false,err:'',calList:null,timer:null,showSet:false,memo:null,memoFor:null};
+  token:null,tokenExp:0,q:[],qUnsub:null,idDraft:null,tc:null,tcFor:'',syncing:false,err:'',calList:null,timer:null,showSet:false,memo:null,memoFor:null};
 
 const env=()=>(window.getDb?window.getDb():{});
 const admin=()=>!!(window.amAdmin&&window.amAdmin());
 const col=()=>env().fs.collection('shared').doc('home').collection('gcal');
+const qcol=()=>env().fs.collection('shared').doc('home').collection('gcalq');
 const pad=x=>String(x).padStart(2,'0');
 const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const parseYmd=s=>{ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
@@ -107,12 +108,17 @@ async function sync(force){
 function open(key,onChange){
   if(S.unsub){ S.unsub(); S.unsub=null; }
   if(S.confUnsub){ S.confUnsub(); S.confUnsub=null; }
+  if(S.qUnsub){ S.qUnsub(); S.qUnsub=null; } S.q=[];
   clearInterval(S.timer); S.timer=null;
   S.key=null; S.data=null; S.denied=false; S.onChange=onChange||null; S.showSet=false; S.memo=null;
   if(!key||!KEYS.includes(key)||!env().fs||!env().userId) return;
   S.key=key;
   S.unsub=col().doc(key).onSnapshot(snap=>{ S.data=snap.exists?snap.data():null; S.denied=false; changed(); },
     e=>{ S.data=null; S.denied=e&&e.code==='permission-denied'; changed(); });
+  // 내가 구글 캘린더에 보낸 추가 요청(맥 서버가 처리하면 사라져요)
+  S.qUnsub=qcol().where('by','==',env().userId).onSnapshot(snap=>{
+    S.q=snap.docs.map(d=>({id:d.id,...d.data()})).filter(r=>r.list===S.key); changed();
+  },()=>{ S.q=[]; });
   if(admin()){
     S.confUnsub=col().doc('config').onSnapshot(snap=>{
       S.conf=snap.exists?snap.data():{}; prepTokenClient(); changed(); sync(false);
@@ -121,6 +127,17 @@ function open(key,onChange){
   }
 }
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'&&S.key&&admin()) sync(false); });
+
+/* ---------- 사이트에서 구글 캘린더에 추가 ---------- */
+// 이 목록에서 일정을 추가할 수 있는 캘린더(맥 서버가 이름·색과 함께 넣어 둬요)
+function cals(){ return (S.data&&Array.isArray(S.data.cals))?S.data.cals:[]; }
+// 추가 요청만 남기면 맥 서버가 몇 초 안에 구글 캘린더에 만들어요.
+function add({title,date,time,calendarId}){
+  if(!S.key||!env().fs||!env().userId) return Promise.reject(new Error('로그인이 필요해요'));
+  const r={list:S.key,calendarId,title:String(title).slice(0,200),date,by:env().userId,at:Date.now()};
+  if(time) r.time=time;
+  return qcol().add(r);
+}
 
 /* ---------- 날짜별 일정 ---------- */
 function daysOf(ev){
@@ -133,22 +150,29 @@ function daysOf(ev){
   return out;
 }
 function byDay(){
-  if(!S.key||!S.data||!Array.isArray(S.data.events)) return {};
+  if(!S.key) return {};
   if(S.memo&&S.memoFor===S.data) return S.memo;
   const by={};
-  S.data.events.forEach(ev=>{ daysOf(ev).forEach((d,i)=>{ (by[d]=by[d]||[]).push({ev,first:i===0}); }); });
+  const evs=(S.data&&Array.isArray(S.data.events))?S.data.events.slice():[];
+  S.q.filter(r=>!r.error).forEach(r=>{
+    const c=cals().find(x=>x.id===r.calendarId)||{name:'구글 캘린더',col:'#9aa0a6'};
+    const nd=ymd(new Date(parseYmd(r.date).getTime()+864e5));
+    evs.push(r.time?{t:r.title,s:`${r.date}T${r.time}:00`,e:`${r.date}T${r.time}:00`,ad:false,c:c.name,col:c.col,u:'',p:true}
+                   :{t:r.title,s:r.date,e:nd,ad:true,c:c.name,col:c.col,u:'',p:true});
+  });
+  evs.forEach(ev=>{ daysOf(ev).forEach((d,i)=>{ (by[d]=by[d]||[]).push({ev,first:i===0}); }); });
   Object.values(by).forEach(l=>l.sort((a,b)=>(b.ev.ad-a.ev.ad)||(a.ev.s<b.ev.s?-1:1)));
   S.memo=by; S.memoFor=S.data; return by;
 }
 const hm=iso=>{ const d=new Date(iso); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
 function timeLabel({ev,first}){ if(ev.ad) return '하루 종일'; return first?hm(ev.s):'계속'; }
-function pill(x){ const p=el('span','cpill ev',(x.ev.ad||!x.first?'':hm(x.ev.s)+' ')+x.ev.t); p.style.borderLeftColor=x.ev.col; return p; }
+function pill(x){ const p=el('span','cpill ev'+(x.ev.p?' pend':''),(x.ev.ad||!x.first?'':hm(x.ev.s)+' ')+x.ev.t); p.style.borderLeftColor=x.ev.col; return p; }
 function dot(x){ const i=el('i','ev'); i.style.background=x.ev.col; return i; }
 function agendaRow(x){
   const row=el(x.ev.u?'a':'div','aitem ev');
   if(x.ev.u){ row.href=x.ev.u; row.target='_blank'; row.rel='noopener'; row.title='구글 캘린더에서 열기'; }
   const sw=el('span','evsw'); sw.style.background=x.ev.col;
-  const tx=el('div','atx'); tx.append(el('b',null,x.ev.t), el('small',null,x.ev.c));
+  const tx=el('div','atx'); tx.append(el('b',null,x.ev.t), el('small',null,x.ev.p?`${x.ev.c} · 구글에 넣는 중…`:x.ev.c));
   row.append(sw,tx,el('span','evtime',timeLabel(x)));
   return row;
 }
@@ -158,7 +182,7 @@ function ago(t){ const m=Math.round((Date.now()-t)/60000); return m<1?'방금':m
 function bar(){
   if(!S.key) return null;
   const isAdmin=admin();
-  if(!isAdmin && !S.data) return null;
+  if(!isAdmin && !S.data && !S.q.length) return null;
   const wrap=el('div','gcal');
   const line=el('div','gcalbar');
   const st=el('span','gcalst');
@@ -178,6 +202,11 @@ function bar(){
   }
   wrap.append(line);
   if(S.err&&isAdmin) wrap.append(el('p','gcalerr',S.err));
+  S.q.filter(r=>r.error).forEach(r=>{
+    const p=el('p','gcalerr',`'${r.title}'을(를) 구글 캘린더에 넣지 못했어요: ${r.error} `);
+    const x=el('button','chip','지우기'); x.type='button'; x.onclick=()=>qcol().doc(r.id).delete().catch(()=>{});
+    p.append(x); wrap.append(p);
+  });
   if(S.denied&&isAdmin) wrap.append(el('p','gcalerr','Firestore 규칙에 구글 캘린더 칸(gcal)이 아직 없어요. 저장소의 firestore.rules를 Firebase 콘솔에 붙여 넣고 게시해 주세요.'));
   if(isAdmin&&S.showSet) wrap.append(settings());
   return wrap;
@@ -236,5 +265,5 @@ function settings(){
   return box;
 }
 
-window.GCAL={open,byDay,bar,pill,dot,agendaRow,keys:KEYS};
+window.GCAL={open,byDay,bar,pill,dot,agendaRow,cals,add,keys:KEYS};
 })();

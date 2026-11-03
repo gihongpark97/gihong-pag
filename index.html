@@ -94,7 +94,11 @@ ul.tree{list-style:none;margin:0;padding:0}
 .aitem.done .atx b{color:var(--muted);text-decoration:line-through;font-weight:400}
 .aitem .atx b{font-weight:400}
 .anone{color:var(--muted);font-size:.875rem;padding:6px 0}
-.agenda form{display:flex;gap:8px;margin-top:8px}.agenda form input{flex:1;min-width:0}
+.agenda form{display:flex;gap:8px;margin-top:8px}.agenda form input{flex:1;min-width:0}.agenda form input.gctime{flex:0 0 auto;width:7.5em}
+.gcpick{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.gcpick .chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;font-size:.85rem}
+.gcpick .chip i{width:10px;height:10px;border-radius:50%;flex:none}
+.cpill.pend{opacity:.6}
 .undated{margin-top:14px}
 .undated summary{cursor:pointer;color:var(--muted);font-size:.875rem;padding:6px 2px}
 .undated .aitem{padding-left:4px}
@@ -666,7 +670,7 @@ body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--l
 <script src="appliance.js?v=20261103d"></script>
 <script src="stocks.js?v=20261103d"></script>
 <script src="admin.js?v=20261103d"></script>
-<script src="gcal.js?v=20261103e"></script>
+<script src="gcal.js?v=20261103f"></script>
 <script>
 const ICON = {
   chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -916,13 +920,36 @@ function renderCal(){
   elist.forEach(x=>ag.append(GCAL.agendaRow(x)));
   if(list.length) list.forEach(x=>ag.append(agendaItem(x,true)));
   else if(!elist.length){ const e=document.createElement('div'); e.className='anone'; e.textContent='이 날엔 할 일이 없어요. 아래에 적거나, 날짜 없는 할 일에 날짜를 붙여 보세요.'; ag.append(e); }
+  // 어디에 넣을지: '할 일'(체크리스트) 또는 구글 캘린더(색깔별)
+  const gcals=window.GCAL?GCAL.cals():[];
+  let to=gcals.some(c=>c.id===ui.gcalTo)?ui.gcalTo:'';
   const f=document.createElement('form');
-  const inp=document.createElement('input'); inp.type='text'; inp.placeholder='이 날에 할 일 추가'; inp.setAttribute('enterkeyhint','done'); inp.autocomplete='off';
+  const inp=document.createElement('input'); inp.type='text'; inp.setAttribute('enterkeyhint','done'); inp.autocomplete='off';
   if(calFocus){ inp.setAttribute('data-focus',''); calFocus=false; }
+  const tm=document.createElement('input'); tm.type='time'; tm.className='gctime'; tm.setAttribute('aria-label','시간(비우면 하루 종일)'); tm.title='시간(비우면 하루 종일)';
   const b=document.createElement('button'); b.className='btn'; b.type='submit'; b.textContent='추가';
-  f.onsubmit=e=>{ e.preventDefault(); const v=inp.value.trim(); if(!v) return;
+  const sync=()=>{ tm.hidden=!to; const c=gcals.find(x=>x.id===to);
+    inp.placeholder=c?`'${c.name}'에 일정 추가`:'이 날에 할 일 추가';
+    pick&&pick.querySelectorAll('button').forEach(x=>{ const on=x.dataset.id===to; x.setAttribute('aria-pressed',on); x.style.borderColor=on&&x.dataset.col?x.dataset.col:''; }); };
+  let pick=null;
+  if(gcals.length){
+    pick=document.createElement('div'); pick.className='gcpick'; pick.setAttribute('role','group'); pick.setAttribute('aria-label','어디에 추가할까요');
+    const mkc=(id,name,col)=>{ const x=document.createElement('button'); x.type='button'; x.className='chip'; x.dataset.id=id; if(col) x.dataset.col=col;
+      if(col){ const dot=document.createElement('i'); dot.style.background=col; x.append(dot); }
+      x.append(document.createTextNode(name)); x.onclick=()=>{ to=id; ui.gcalTo=id; ls.set(LS_UI,ui); sync(); inp.focus(); }; return x; };
+    pick.append(mkc('','할 일',''));
+    gcals.forEach(c=>pick.append(mkc(c.id,c.name,c.col)));
+    ag.append(pick);
+  }
+  f.onsubmit=async e=>{ e.preventDefault(); const v=inp.value.trim(); if(!v) return;
+    if(to){
+      b.disabled=true;
+      try{ await GCAL.add({title:v,date:calSel,time:tm.value||'',calendarId:to}); inp.value=''; tm.value=''; calFocus=true; render(); }
+      catch(err){ alert(err&&err.code==='permission-denied'?'구글 캘린더에 보낼 권한이 없어요. Firebase 규칙을 새로 게시했는지 확인해 주세요.':'구글 캘린더에 보내지 못했어요. 인터넷 연결을 확인해 주세요.'); }
+      b.disabled=false; return;
+    }
     tree.push({id:uid(),text:v,done:false,date:calSel,children:[]}); calFocus=true; commit(); };
-  f.append(inp,b); ag.append(f);
+  f.append(inp,tm,b); sync(); ag.append(f);
   box.append(ag);
 
   // 날짜 없는 할 일: 날짜를 붙이면 달력에 나타나요
