@@ -95,3 +95,27 @@ npm run check      # Firestore에 쓰지 않고, 어떤 캘린더에서 몇 개 
 
 - **시스템 설정 › 일반 › 공유 › 원격 로그인** 켜기
 - [Tailscale](https://tailscale.com/download)을 맥과 휴대폰에 깔고 같은 계정으로 로그인하면, 공유기 설정 없이 `ssh 맥이름` 으로 들어갈 수 있어요.
+
+---
+
+# 홈페이지를 맥에서 띄우기
+
+GitHub Pages 대신 이 맥이 gihong-pag.com 을 직접 보여 줘요. 맥의 Caddy 웹서버가 저장소 폴더를 보여 주고, Cloudflare Tunnel 이 도메인을 맥에 연결해요. 공유기 포트 설정은 필요 없어요. GitHub main 에 새 코드가 올라오면 5분 안에 맥이 받아서 바로 반영해요.
+
+**맥이 꺼지거나 인터넷이 끊기면 사이트도 같이 안 열려요.** 재부팅 뒤에는 맥에 한 번 로그인해야 다시 떠요.
+
+1. [Cloudflare](https://dash.cloudflare.com/sign-up)에 무료 가입 → **사이트 추가** → `gihong-pag.com` → **Free** 요금제
+2. Cloudflare가 알려 주는 **네임서버 2개**를 가비아 › 도메인 관리 › **네임서버 설정**에 넣기 (기존 가비아 네임서버 대신)
+3. Cloudflare 화면에 "활성(Active)"이 뜰 때까지 기다리기 (보통 몇 분 ~ 몇 시간)
+4. 맥 터미널:
+   ```bash
+   cd ~/gihong-pag/mac-server && ./site-install.sh
+   ```
+   Cloudflare 로그인 창이 뜨면 `gihong-pag.com` 을 고르고 승인해요.
+5. https://gihong-pag.com 이 열리면, GitHub 저장소 **Settings › Pages** 에서 Pages 를 꺼요.
+
+| 하고 싶은 것 | 명령 |
+|---|---|
+| 웹서버 기록 | `tail -f ~/.gihong-server/logs/site.log` |
+| 사이트 끄기 | `./site-install.sh --uninstall` |
+| 터널 끄기 | `cloudflared service uninstall` |
