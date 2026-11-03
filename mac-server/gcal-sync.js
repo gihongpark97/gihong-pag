@@ -3,6 +3,7 @@
 // - 가져올 캘린더/보낼 곳 설정은 사이트 달력의 '설정'에서 저장한 shared/home/gcal/config 를 그대로 써요.
 // - 설정이 없으면 이름에 '공유'가 들어간 캘린더만, 'Jy'가 들어가면 지연, 나머지는 기홍.
 // - 목록마다 일정을 '추가할 수 있는' 캘린더(이름·색)도 같이 넣어 둬요. 사이트가 색깔 버튼으로 보여 줘요.
+//   공통업무에는 넣을 수 있는 캘린더 전부, 다른 목록에는 그 목록으로 보내는 캘린더만.
 // 사용법: node gcal-sync.js            (한 번 맞추고 끝)
 //         node gcal-sync.js --dry-run  (Firestore에 쓰지 않고 결과만 보여 줘요)
 import { pathToFileURL } from 'node:url';
@@ -35,6 +36,9 @@ export async function syncOnce({ dry = false } = {}) {
   const writable = Object.fromEntries(KEYS.map(k => [k, []]));
   const used = [];
 
+  // 공통업무에는 일정을 넣을 수 있는 캘린더를 전부 색깔 버튼으로 보여 줘요(설정에서 꺼 둔 것도).
+  cals.forEach(c => { if (c.canWrite) writable.common.push({ id: c.id, name: c.name, col: c.col }); });
+
   for (const c of cals) {
     const cf = calConf(c, conf); if (!cf.on) continue;
     const items = []; let page = '';
@@ -52,7 +56,7 @@ export async function syncOnce({ dry = false } = {}) {
     const keys = ['common', ...(TARGETS[cf.to] || [])];
     keys.forEach(k => {
       out[k].push(...evs);
-      if (c.canWrite) writable[k].push({ id: c.id, name: c.name, col: c.col });
+      if (c.canWrite && k !== 'common') writable[k].push({ id: c.id, name: c.name, col: c.col });
     });
     used.push(`${c.name}(${cf.to}, ${evs.length}개${c.canWrite ? '' : ', 읽기만'})`);
   }
