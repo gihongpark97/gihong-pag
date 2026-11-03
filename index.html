@@ -463,6 +463,27 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .a-gprog{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center}.a-gprog b{font-size:1.3rem;font-variant-numeric:tabular-nums;color:var(--accent)}
 .a-goal.done{border-color:var(--accent)}
 .a-qadd{display:flex;gap:8px;align-items:center}.a-qadd .lin{flex:1}
+.a-budgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 12px}.a-budgrid input{text-align:right}
+.a-plancard .ldl{border-top:1px dashed var(--line);padding-top:10px}
+.a-year{width:100%}.a-year tbody tr{cursor:pointer}.a-year tbody tr:hover{background:var(--bg)}.a-year tr.on td{font-weight:700}
+.a-year tr.a-planrow td{color:var(--muted);font-style:italic}.a-year tfoot td,.a-year tfoot th{font-weight:700;border-top:1px solid var(--line)}
+.a-gnote{margin:0;font-size:.88rem;font-weight:600;color:var(--accent)}.a-gnote.minus{color:var(--danger)}
+.a-tl{display:grid;gap:10px}
+.a-tlrow{display:grid;grid-template-columns:minmax(70px,110px) minmax(0,1fr) minmax(80px,auto);gap:10px;align-items:center;font-size:.88rem}
+.a-tlname{overflow-wrap:anywhere;font-weight:600}.a-tlv{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:.82rem;color:var(--muted)}.a-tlv.minus{color:var(--danger)}
+.a-tltrack{position:relative;height:14px;background:var(--a-track,var(--line));border-radius:99px}
+.a-tlbar{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:99px}.a-tlbar.late{background:var(--danger)}
+.a-tldue{position:absolute;top:-4px;bottom:-4px;width:3px;margin-left:-1.5px;background:var(--fg);border-radius:2px}
+.a-tly{position:absolute;top:0;bottom:0;width:1px;background:var(--surface);opacity:.8}
+.a-tlaxis .a-tltrack{background:none;height:16px}.a-tlaxis .a-tltrack span{position:absolute;font-size:.72rem;color:var(--muted);transform:translateX(-50%);white-space:nowrap}.a-tlaxis .a-tltrack span:first-child{transform:none}
+.a-evs{font-size:.8rem;color:var(--muted)}
+.a-evlist{display:grid;gap:8px}
+.a-ev{display:grid;grid-template-columns:140px minmax(0,1.4fr) 110px minmax(0,1fr) auto;gap:8px;align-items:center}
+.a-future .linkbtn{background:none;border:0;color:var(--accent);text-decoration:underline;cursor:pointer;font:inherit;font-size:.75rem;padding:0}
+.a-future .lhint{white-space:normal}.a-future .ltable{width:100%;min-width:0}.a-future td:first-child{white-space:nowrap}
+@media (max-width:640px){.a-future .a-bcell,.a-future th:nth-child(3){display:none}}
+@media (max-width:640px){.a-ev{grid-template-columns:1fr 1fr auto;padding-bottom:8px;border-bottom:1px dashed var(--line)}.a-ev>.lin:nth-child(2){grid-column:1/-1;grid-row:1}.a-ev>.lin:nth-child(1){grid-row:2}.a-ev>.lin:nth-child(3){grid-row:2;grid-column:2/4}.a-ev>.lin:nth-child(4){grid-row:3;grid-column:1/3}.a-ev>.ib{grid-row:3}
+  .a-tlrow{grid-template-columns:70px minmax(0,1fr);}.a-tlrow .a-tlv{grid-column:2}.a-tlaxis>span:last-child{display:none}}
 .lin input[type=date],.lin input[type=month]{min-height:38px}
 /* 신혼 가전: 가전마다 후보(브랜드·가격)를 비교하고 하나를 골라요 */
 .ap-filter{margin-bottom:14px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.ap-filter .chip{flex:none}
