@@ -1,6 +1,6 @@
 /* 신혼 가전/가구 메뉴: 가전·가구마다 후보(브랜드·모델·가격)를 여러 개 적고 하나를 골라요.
    저장 위치: Firestore shared/home/pages/appliances
-     {budget, items:[{id,cat,name,status:'고민 중'|'결정'|'구매 완료',pick:후보id,memo,
+     {budget, cats:[분류 이름…], items:[{id,cat,name,status:'고민 중'|'결정'|'구매 완료',pick:후보id,memo,
        options:[{id,brand,model,price,store,link,memo}]}]}
    로그인 없이 쓰면 이 기기(localStorage 'hong.appliances')에만 저장돼요. */
 (function(){
@@ -16,7 +16,7 @@ const SEED=[
 ];
 const nid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 const newOpt=()=>({id:nid(),brand:'',model:'',price:0,store:'',link:'',memo:''});
-const fresh=()=>({budget:0,items:SEED.flatMap(([cat,names])=>names.map(name=>({id:nid(),cat,name,status:'고민 중',pick:'',memo:'',options:[]})))});
+const fresh=()=>({budget:0,cats:[...CATS],items:SEED.flatMap(([cat,names])=>names.map(name=>({id:nid(),cat,name,status:'고민 중',pick:'',memo:'',options:[]})))});
 
 const LS='hong.appliances';
 let state=null, root=null, ref=null, unsub=null, saveT=null, saving=false, pending=false, editingId=null, filter='전체';
@@ -36,6 +36,31 @@ const prices=i=>i.options.map(o=>+o.price||0).filter(Boolean);
 const pickedSum=list=>list.reduce((a,i)=>{ const p=picked(i); return a+(p?+p.price||0:0); },0);
 const safeLink=u=>{ u=String(u||'').trim(); if(!u) return ''; if(!/^https?:\/\//i.test(u)) u='https://'+u; return u; };
 const optLabel=o=>[o.brand,o.model].filter(Boolean).join(' ')||'(이름 없는 후보)';
+/* 분류: state.cats(직접 추가한 순서) + 품목에만 남아 있는 분류 */
+function getCats(){ const base=Array.isArray(state.cats)&&state.cats.length?state.cats:CATS; return [...new Set([...base,...state.items.map(i=>i.cat).filter(Boolean)])]; }
+const reserved=n=>n==='전체'||STATUS.includes(n);
+function askCat(msg,def){
+  const n=(prompt(msg,def||'')||'').trim(); if(!n) return null;
+  if(reserved(n)){ alert(`'${n}'은(는) 분류 이름으로 쓸 수 없어요.`); return null; }
+  return n;
+}
+function addCat(){
+  const n=askCat('새 분류 이름 (예: 욕실 용품, 침구)'); if(!n) return;
+  const cats=getCats(); if(cats.includes(n)){ alert('이미 있는 분류예요.'); return; }
+  state.cats=[...cats,n]; filter=n; editingId=null; save(); render();
+}
+function renameCat(c){
+  const n=askCat('분류 이름 바꾸기',c); if(!n||n===c) return;
+  const cats=getCats(); if(cats.includes(n)){ alert('이미 있는 분류예요.'); return; }
+  state.cats=cats.map(x=>x===c?n:x); state.items.forEach(i=>{ if(i.cat===c) i.cat=n; });
+  if(filter===c) filter=n; save(); render();
+}
+function deleteCat(c){
+  const n=state.items.filter(i=>i.cat===c).length;
+  if(n){ alert(`'${c}'에 품목이 ${n}개 있어요. 품목을 지우거나 다른 분류로 옮긴 뒤에 지울 수 있어요.`); return; }
+  if(!confirm(`'${c}' 분류를 지울까요?`)) return;
+  state.cats=getCats().filter(x=>x!==c); if(filter===c) filter='전체'; save(); render();
+}
 
 /* ---------- 저장 ---------- */
 function setStatus(t,err){ const s=root&&root.querySelector('#apsync'); if(s){ s.textContent=t; s.classList.toggle('err',!!err); } }
@@ -59,7 +84,7 @@ function sync(){
   unsub=ref.onSnapshot(snap=>{
     if(snap.metadata.hasPendingWrites||pending||saving) return;
     const d=snap.exists?snap.data():null;
-    if(d&&Array.isArray(d.items)){ state={budget:+d.budget||0,items:d.items}; try{ localStorage.setItem(LS,JSON.stringify(state)); }catch(e){} }
+    if(d&&Array.isArray(d.items)){ state={budget:+d.budget||0,cats:Array.isArray(d.cats)?d.cats:null,items:d.items}; try{ localStorage.setItem(LS,JSON.stringify(state)); }catch(e){} }
     else if(!snap.metadata.fromCache){ pending=true; flush(); } // 처음 로그인: 이 기기 내용을 올려요
     if(root&&!root.contains(document.activeElement)) render();
     setStatus('모든 기기에 저장됨');
@@ -83,15 +108,21 @@ function render(){
     el('div',{class:'ltile'},el('div',{class:'ltt'},el('b',{},'고른 품목 합계')),el('div',{class:'wbig'},eok(total)),el('div',{class:'llab'},undecided?`아직 안 고른 품목 ${undecided}개`:'모두 골랐어요')),
     el('div',{class:'ltile'},el('div',{class:'ltt'},el('b',{},'구매 완료')),el('div',{class:'wbig'},eok(bought)),el('div',{class:'llab'},`남은 결제 ${eok(total-bought)}`)),
     leftTile());
-  const chips=el('div',{class:'lbtns ap-filter'},...['전체',...CATS,...STATUS].map(f=>el('button',{class:'chip',type:'button','aria-pressed':String(filter===f),onclick:()=>{filter=f;editingId=null;render();}},f)));
+  const CS=getCats(); if(filter!=='전체'&&!CS.includes(filter)&&!STATUS.includes(filter)) filter='전체';
+  const chips=el('div',{class:'lbtns ap-filter'},...['전체',...CS,...STATUS].map(f=>el('button',{class:'chip',type:'button','aria-pressed':String(filter===f),onclick:()=>{filter=f;editingId=null;render();}},f)),
+    el('button',{class:'chip ap-addcat',type:'button',onclick:addCat},'+ 분류 추가'));
   const shown=i=>filter==='전체'||i.cat===filter||i.status===filter;
-  const cats=[...CATS,...new Set(items.map(i=>i.cat).filter(c=>!CATS.includes(c)))];
+  const cats=CS;
   const secs=cats.map(cat=>{ const list=items.filter(i=>i.cat===cat&&shown(i));
     if(!list.length&&filter!=='전체'&&filter!==cat) return null;
     return el('section',{class:'lcard wsec'},
-      el('div',{class:'lbar'},el('h2',{},cat),el('span',{class:'wtot'},won(pickedSum(list)))),
+      el('div',{class:'lbar'},el('h2',{},cat),
+        el('span',{class:'ap-catbtns'},
+          el('button',{class:'ib',type:'button','aria-label':`${cat} 이름 바꾸기`,title:'이름 바꾸기',onclick:()=>renameCat(cat)},'✎'),
+          el('button',{class:'ib del',type:'button','aria-label':`${cat} 분류 삭제`,title:'분류 삭제',onclick:()=>deleteCat(cat)},'✕'),
+          el('span',{class:'wtot'},won(pickedSum(list))))),
       el('div',{class:'wlist'},...list.map(i=>i.id===editingId?editForm(i):itemRow(i))),
-      el('button',{class:'chip',type:'button',onclick:()=>{ const i={id:nid(),cat,name:'',status:'고민 중',pick:'',memo:'',options:[newOpt()]}; items.push(i); editingId=i.id; render(); }},cat==='가구'?'가구 추가':'가전 추가'));
+      el('button',{class:'chip',type:'button',onclick:()=>{ const i={id:nid(),cat,name:'',status:'고민 중',pick:'',memo:'',options:[newOpt()]}; items.push(i); editingId=i.id; render(); }},cat==='가구'?'가구 추가':CATS.slice(0,4).includes(cat)?'가전 추가':'품목 추가'));
   }).filter(Boolean);
   const dl=el('datalist',{id:'ap-brands'},...BRANDS.map(b=>el('option',{value:b})));
   root.replaceChildren(head,tiles,chips,...secs,dl,el('p',{class:'lnote'},'품목을 누르면 후보(브랜드·모델·가격)를 여러 개 적고 비교할 수 있어요. 고른 후보의 가격이 합계에 들어가요.'));
@@ -127,8 +158,8 @@ function editForm(i){
       o.link?el('a',{class:'ap-link',href:safeLink(o.link),target:'_blank',rel:'noopener'},'상품 페이지 열기'):null);
   }):[el('p',{class:'lnote'},'아직 후보가 없어요. 아래에서 브랜드·가격 후보를 추가하세요.')]));
   draw();
-  const name=el('input',{type:'text',value:i.name,id:`ap-n-${i.id}`,placeholder:i.cat==='가구'?'가구 이름 (예: 침대)':'가전 이름 (예: 냉장고)'});
-  const cat=el('select',{id:`ap-c-${i.id}`},...CATS.map(c=>el('option',{value:c},c))); cat.value=CATS.includes(i.cat)?i.cat:CATS[0];
+  const name=el('input',{type:'text',value:i.name,id:`ap-n-${i.id}`,placeholder:i.cat==='가구'?'가구 이름 (예: 침대)':CATS.slice(0,4).includes(i.cat)?'가전 이름 (예: 냉장고)':'품목 이름'});
+  const CS=getCats(); const cat=el('select',{id:`ap-c-${i.id}`},...CS.map(c=>el('option',{value:c},c))); cat.value=CS.includes(i.cat)?i.cat:CS[0];
   const st=el('select',{id:`ap-t-${i.id}`},...STATUS.map(c=>el('option',{value:c},c))); st.value=i.status;
   const memo=el('textarea',{id:`ap-x-${i.id}`,rows:'2',placeholder:'원하는 조건 (예: 4도어, 800L 이상, 화이트)'}); memo.value=i.memo||'';
   const form=el('form',{class:'ledit wedit'},
