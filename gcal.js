@@ -265,5 +265,13 @@ function settings(){
   return box;
 }
 
-window.GCAL={open,byDay,bar,pill,dot,agendaRow,cals,add,keys:KEYS};
+// 이 목록 달력에 나오는 캘린더들(이름·색). '보기' 고르기 버튼에 써요.
+function shown(){
+  const m=new Map();
+  ((S.data&&S.data.events)||[]).forEach(e=>{ if(!m.has(e.c)) m.set(e.c,e.col); });
+  cals().forEach(c=>{ if(!m.has(c.name)) m.set(c.name,c.col); });
+  return [...m].map(([name,col])=>({name,col})).sort((a,b)=>a.name.localeCompare(b.name,'ko'));
+}
+
+window.GCAL={open,byDay,bar,pill,dot,agendaRow,cals,add,shown,keys:KEYS};
 })();

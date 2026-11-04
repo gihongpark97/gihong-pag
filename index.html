@@ -99,6 +99,12 @@ ul.tree{list-style:none;margin:0;padding:0}
 .gcpick .chip{display:inline-flex;align-items:center;gap:6px;min-height:32px;font-size:.85rem}
 .gcpick .chip i{width:10px;height:10px;border-radius:50%;flex:none}
 .cpill.pend{opacity:.6}
+.gcview{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0 0 10px}
+.gcview .chip{display:inline-flex;align-items:center;gap:6px;min-height:30px;font-size:.82rem}
+.gcview .chip i{width:9px;height:9px;border-radius:50%;flex:none}
+.gcview .chip.off{opacity:.45;text-decoration:line-through}
+.gcvlab{font-size:.8rem;color:var(--muted);margin-right:2px}
+.gcvsave{margin-left:auto}.gcvsave:disabled{opacity:.6;cursor:default}
 .undated{margin-top:14px}
 .undated summary{cursor:pointer;color:var(--muted);font-size:.875rem;padding:6px 2px}
 .undated .aitem{padding-left:4px}
@@ -670,7 +676,7 @@ body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--l
 <script src="appliance.js?v=20261103d"></script>
 <script src="stocks.js?v=20261103d"></script>
 <script src="admin.js?v=20261103d"></script>
-<script src="gcal.js?v=20261103f"></script>
+<script src="gcal.js?v=20261104a"></script>
 <script>
 const ICON = {
   chev:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 5l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -834,7 +840,12 @@ const ymd=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const parseYmd=s=>{ const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
 const today=()=>ymd(new Date());
 const fmtDate=s=>{ const d=parseYmd(s); return `${d.getMonth()+1}/${d.getDate()} (${WD[d.getDay()]})`; };
-let calMonth=null, calSel=null, calFocus=false;  // 달력에서 보고 있는 달(그 달 1일)과 고른 날짜
+let calMonth=null, calSel=null, calFocus=false;
+// 달력 '보기': 숨긴 캘린더 이름들(+ '할 일'은 TODO_KEY). 목록마다 기본값을 이 기기에 저장해 둬요(ui.calHideDef).
+const TODO_KEY='\u0000todo';
+let calHide=null, calHideFor=null;
+const calDef=()=>((ui.calHideDef||{})[current]||[]);
+function hiddenSet(){ if(calHideFor!==current){ calHide=new Set(calDef()); calHideFor=current; } return calHide; }  // 달력에서 보고 있는 달(그 달 1일)과 고른 날짜
 function dateCls(n){ if(!n.date) return ''; const t=today(); return n.date===t?'today':(!n.done&&n.date<t?'late':''); }
 function dateCtl(n){
   const w=document.createElement('label'); w.className='dt '+(n.date?'set '+dateCls(n):'empty');
@@ -873,8 +884,10 @@ function renderCal(){
   const t=today();
   if(!calSel) calSel=t;
   if(!calMonth){ const d=parseYmd(calSel); calMonth=new Date(d.getFullYear(),d.getMonth(),1); }
-  const {by,undated}=collectDated();
-  const gev=window.GCAL?GCAL.byDay():{};  // 구글 캘린더 일정(읽기 전용)
+  const hid=hiddenSet();
+  const all=collectDated(), undated=all.undated, by=hid.has(TODO_KEY)?{}:all.by;
+  const gev0=window.GCAL?GCAL.byDay():{};  // 구글 캘린더 일정(읽기 전용)
+  const gev={}; Object.keys(gev0).forEach(d=>{ const l=gev0[d].filter(x=>!hid.has(x.ev.c)); if(l.length) gev[d]=l; });
   const head=document.createElement('div'); head.className='calhead';
   const h=document.createElement('h2'); h.textContent=`${calMonth.getFullYear()}년 ${calMonth.getMonth()+1}월`;
   const mk=(html,label,fn)=>{ const b=document.createElement('button'); b.className='ib'; b.innerHTML=html; b.setAttribute('aria-label',label); b.onclick=fn; return b; };
@@ -884,6 +897,7 @@ function renderCal(){
   head.append(h, mk(ICON.prev,'이전 달',()=>move(-1)), tb, mk(ICON.next,'다음 달',()=>move(1)));
   box.append(head);
   const gb=window.GCAL&&GCAL.bar(); if(gb) box.append(gb);
+  const vw=calViewPick(hid); if(vw) box.append(vw);
 
   const grid=document.createElement('div'); grid.className='cgrid';
   WD.forEach((w,i)=>{ const c=document.createElement('div'); c.className='cwd'+(i===0?' sun':i===6?' sat':''); c.textContent=w; grid.append(c); });
@@ -960,6 +974,33 @@ function renderCal(){
     det.append(su); undated.forEach(x=>det.append(agendaItem(x,false)));
     box.append(det);
   }
+}
+// 달력 위 '보기' 줄: 전체 / 할 일 / 캘린더별로 켜고 끄고, 지금 고른 걸 기본값으로 저장해요.
+function calViewPick(hid){
+  const cs=window.GCAL?GCAL.shown():[];
+  if(!cs.length) return null;
+  const opts=[{k:TODO_KEY,name:'할 일',col:''},...cs.map(c=>({k:c.name,name:c.name,col:c.col}))];
+  const wrap=document.createElement('div'); wrap.className='gcview'; wrap.setAttribute('role','group'); wrap.setAttribute('aria-label','달력에 보일 것 고르기');
+  const lab=document.createElement('span'); lab.className='gcvlab'; lab.textContent='보기'; wrap.append(lab);
+  const chip=(name,col,on,fn)=>{ const x=document.createElement('button'); x.type='button'; x.className='chip'; x.setAttribute('aria-pressed',on);
+    if(col){ const i=document.createElement('i'); i.style.background=col; x.append(i); }
+    x.append(document.createTextNode(name)); x.onclick=fn; return x; };
+  const known=new Set(opts.map(o=>o.k)), none=![...hid].some(k=>known.has(k));
+  wrap.append(chip('전체','',none,()=>{ hid.clear(); render(); }));
+  opts.forEach(o=>{ const x=chip(o.name,o.col,!none&&!hid.has(o.k),()=>{
+    // '전체'인 상태에서 하나를 누르면 그것만 보여요. 그다음부터는 누를 때마다 켜고 꺼요.
+    if(none){ opts.forEach(x=>{ if(x.k!==o.k) hid.add(x.k); }); }
+    else if(hid.has(o.k)) hid.delete(o.k); else hid.add(o.k);
+    if(opts.every(x=>hid.has(x.k))) hid.clear();
+    render(); });
+    if(!none&&hid.has(o.k)) x.classList.add('off');
+    wrap.append(x); });
+  const cur=[...hid].sort(), def=[...calDef()].sort(), same=cur.join('\n')===def.join('\n');
+  const sv=document.createElement('button'); sv.type='button'; sv.className='chip gcvsave'; sv.textContent=same?'기본값 ✓':'기본값으로 저장';
+  sv.disabled=same; sv.title='이 목록을 열 때 처음에 이렇게 보여요(이 기기)';
+  sv.onclick=()=>{ ui.calHideDef=Object.assign({},ui.calHideDef,{[current]:cur}); ls.set(LS_UI,ui); render(); };
+  wrap.append(sv);
+  return wrap;
 }
 $('mode-list').onclick=()=>{ ui.calView=false; ls.set(LS_UI,ui); render(); };
 $('mode-cal').onclick=()=>{ ui.calView=true; ls.set(LS_UI,ui); render(); };
