@@ -1,7 +1,9 @@
 /* 신혼 가전/가구 메뉴: 가전·가구마다 후보(브랜드·모델·가격)를 여러 개 적고 하나를 골라요.
    저장 위치: Firestore shared/home/pages/appliances
      {budget, cats:[분류 이름…], items:[{id,cat,name,status:'고민 중'|'결정'|'구매 완료',pick:후보id,memo,
-       options:[{id,brand,model,price,store,link,memo}]}]}
+       options:[{id,brand,model,price,store,link,memo,photos:[{id}|{url}]}]}]}
+   사진: 올린 사진은 줄여서 shared/home/pages/appliances/photos/{id}(크게)·{id}-t(작게)에 따로 저장돼요.
+     {url}은 쇼핑몰 이미지 주소를 그대로 붙인 것. 로그인 없이 쓰면 localStorage 'hong.ap.photo.{id}'.
    로그인 없이 쓰면 이 기기(localStorage 'hong.appliances')에만 저장돼요. */
 (function(){
 const CATS=['대형 가전','주방 가전','생활 가전','소형 가전','가구'];
@@ -35,6 +37,7 @@ const picked=i=>i.options.find(o=>o.id===i.pick)||null;
 const prices=i=>i.options.map(o=>+o.price||0).filter(Boolean);
 const pickedSum=list=>list.reduce((a,i)=>{ const p=picked(i); return a+(p?+p.price||0:0); },0);
 const safeLink=u=>{ u=String(u||'').trim(); if(!u) return ''; if(!/^https?:\/\//i.test(u)) u='https://'+u; return u; };
+const optPhotos=o=>Array.isArray(o.photos)?o.photos:(o.photos=[]);
 const optLabel=o=>[o.brand,o.model].filter(Boolean).join(' ')||'(이름 없는 후보)';
 /* 분류: state.cats(직접 추가한 순서) + 품목에만 남아 있는 분류 */
 function getCats(){ const base=Array.isArray(state.cats)&&state.cats.length?state.cats:CATS; return [...new Set([...base,...state.items.map(i=>i.cat).filter(Boolean)])]; }
@@ -91,6 +94,92 @@ function sync(){
   },e=>setStatus(e&&e.code==='permission-denied'?'이 계정은 볼 권한이 없어요':'동기화 끊김 · 새로고침해 주세요',true));
 }
 
+/* ---------- 사진 ---------- */
+const PLS='hong.ap.photo.';
+const pcache=new Map();
+const photoCol=()=>ref?ref.collection('photos'):null;
+function photoSrc(p,thumb){
+  if(p.url) return Promise.resolve(safeLink(p.url));
+  const key=p.id+(thumb?'-t':'');
+  if(!pcache.has(key)) pcache.set(key,(async()=>{
+    try{ const l=localStorage.getItem(PLS+key); if(l) return l; }catch(e){}
+    const col=photoCol(); if(!col) return '';
+    const s=await col.doc(key).get(); return s.exists?s.data().d||'':'';
+  })().catch(()=>{ pcache.delete(key); return ''; }));
+  return pcache.get(key);
+}
+function photoImg(p,thumb,attrs={}){
+  const img=el('img',{alt:'',loading:'lazy',...attrs});
+  photoSrc(p,thumb).then(src=>{ if(src) img.src=src; else img.classList.add('ap-noimg'); });
+  img.onerror=()=>img.classList.add('ap-noimg');
+  return img;
+}
+async function decode(file){
+  if(window.createImageBitmap){ try{ return await createImageBitmap(file,{imageOrientation:'from-image'}); }catch(e){} }
+  return await new Promise((ok,no)=>{ const u=URL.createObjectURL(file), im=new Image(); im.onload=()=>{ ok(im); setTimeout(()=>URL.revokeObjectURL(u),0); }; im.onerror=()=>{ URL.revokeObjectURL(u); no(new Error('decode')); }; im.src=u; });
+}
+function shrink(img,max,limit){
+  const W=img.width, H=img.height;
+  for(let m=max;m>=120;m=Math.round(m*0.8)){
+    const r=Math.min(1,m/Math.max(W,H)), w=Math.max(1,Math.round(W*r)), h=Math.max(1,Math.round(H*r));
+    const c=document.createElement('canvas'); c.width=w; c.height=h;
+    const g=c.getContext('2d'); g.fillStyle='#fff'; g.fillRect(0,0,w,h); g.drawImage(img,0,0,w,h);
+    for(const q of [0.82,0.7,0.58]){ const d=c.toDataURL('image/jpeg',q); if(d.length<=limit) return d; }
+  }
+  throw new Error('too big');
+}
+async function addPhotos(o,files,after){
+  files=[...files].filter(f=>f&&/^image\//.test(f.type)); if(!files.length) return;
+  const col=photoCol(); let fail='';
+  setStatus(`사진 올리는 중… (${files.length}장)`);
+  for(const f of files){
+    try{
+      const img=await decode(f), id=nid();
+      const full=shrink(img,1400,700000), t=shrink(img,320,45000);
+      if(col) await Promise.all([col.doc(id).set({d:full,at:Date.now()}),col.doc(id+'-t').set({d:t,at:Date.now()})]);
+      else { try{ localStorage.setItem(PLS+id,full); localStorage.setItem(PLS+id+'-t',t); }catch(e){ localStorage.removeItem(PLS+id); throw Object.assign(new Error('quota'),{code:'quota'}); } }
+      pcache.set(id,Promise.resolve(full)); pcache.set(id+'-t',Promise.resolve(t));
+      optPhotos(o).push({id}); after&&after();
+    }catch(e){
+      fail=e&&e.code==='permission-denied'?'사진을 저장할 권한이 없어요. (Firebase 규칙을 새로 게시해야 해요)'
+        :e&&e.code==='quota'?'이 기기 저장 공간이 꽉 찼어요. 로그인하면 사진을 서버에 저장해요.'
+        :e&&e.message==='decode'?`'${f.name}' 사진을 열 수 없어요. (JPG·PNG로 바꿔서 올려 주세요)`
+        :'사진을 올리지 못했어요. 연결을 확인하세요.';
+    }
+  }
+  save(); if(fail) alert(fail);
+}
+function dropPhotoDocs(list){
+  (list||[]).forEach(p=>{ if(!p||!p.id) return; pcache.delete(p.id); pcache.delete(p.id+'-t');
+    try{ localStorage.removeItem(PLS+p.id); localStorage.removeItem(PLS+p.id+'-t'); }catch(e){}
+    const col=photoCol(); if(col){ col.doc(p.id).delete().catch(()=>{}); col.doc(p.id+'-t').delete().catch(()=>{}); } });
+}
+/* 크게 보기: 한 품목의 모든 후보 사진을 넘겨 가며 비교 */
+function viewer(i,startOpt,startIdx){
+  const all=[]; i.options.forEach(o=>optPhotos(o).forEach((p,k)=>all.push({o,p,k})));
+  if(!all.length) return;
+  let n=Math.max(0,all.findIndex(x=>x.o===startOpt&&x.k===(startIdx||0)));
+  const box=el('div',{class:'ap-lb',role:'dialog','aria-modal':'true','aria-label':`${i.name||'품목'} 사진`});
+  const close=()=>{ box.remove(); document.removeEventListener('keydown',key); };
+  const go=d=>{ n=(n+d+all.length)%all.length; show(); };
+  const key=e=>{ if(e.key==='Escape') close(); else if(e.key==='ArrowLeft') go(-1); else if(e.key==='ArrowRight') go(1); };
+  function show(){
+    const {o,p}=all[n], on=i.pick===o.id;
+    box.replaceChildren(
+      el('div',{class:'ap-lbtop'},el('span',{},`${n+1} / ${all.length}`),el('button',{class:'ib',type:'button','aria-label':'닫기',onclick:close},'✕')),
+      el('div',{class:'ap-lbimg'},photoImg(p,false)),
+      el('div',{class:'ap-lbcap'+(on?' on':'')},
+        el('b',{},optLabel(o)),+o.price?` · ${won(o.price)}`:'',o.store?` · ${o.store}`:'',on?' · 고른 후보':'',
+        o.memo?el('div',{class:'ap-lbmemo'},o.memo):null),
+      all.length>1?el('button',{class:'ap-lbnav prev',type:'button','aria-label':'이전 사진',onclick:()=>go(-1)},'‹'):null,
+      all.length>1?el('button',{class:'ap-lbnav next',type:'button','aria-label':'다음 사진',onclick:()=>go(1)},'›'):null);
+  }
+  box.onclick=e=>{ if(e.target===box||e.target.classList.contains('ap-lbimg')) close(); };
+  let sx=null; box.ontouchstart=e=>{ sx=e.touches[0].clientX; };
+  box.ontouchend=e=>{ if(sx==null) return; const dx=e.changedTouches[0].clientX-sx; sx=null; if(Math.abs(dx)>50) go(dx<0?1:-1); };
+  document.addEventListener('keydown',key); document.body.append(box); show();
+}
+
 /* ---------- 화면 ---------- */
 function render(){
   if(!root) return;
@@ -125,7 +214,7 @@ function render(){
       el('button',{class:'chip',type:'button',onclick:()=>{ const i={id:nid(),cat,name:'',status:'고민 중',pick:'',memo:'',options:[newOpt()]}; items.push(i); editingId=i.id; render(); }},cat==='가구'?'가구 추가':CATS.slice(0,4).includes(cat)?'가전 추가':'품목 추가'));
   }).filter(Boolean);
   const dl=el('datalist',{id:'ap-brands'},...BRANDS.map(b=>el('option',{value:b})));
-  root.replaceChildren(head,tiles,chips,...secs,dl,el('p',{class:'lnote'},'품목을 누르면 후보(브랜드·모델·가격)를 여러 개 적고 비교할 수 있어요. 고른 후보의 가격이 합계에 들어가요.'));
+  root.replaceChildren(head,tiles,chips,...secs,dl,el('p',{class:'lnote'},'품목을 누르면 후보(브랜드·모델·가격·사진)를 여러 개 적고 비교할 수 있어요. 사진을 누르면 크게 넘겨 보며 비교해요. 고른 후보의 가격이 합계에 들어가요.'));
   setStatus(ref?'모든 기기에 저장됨':'이 기기에만 저장됨');
 }
 function itemRow(i){
@@ -138,7 +227,16 @@ function itemRow(i){
         el('span',{class:'ap-top'},el('span',{class:'wname'},i.name||'(이름 없음)'),el('span',{class:'ap-st','data-st':i.status},i.status)),
         el('span',{class:'ap-sub'+(p?' on':'')},sub)),
       el('span',{class:'wamt'+(p&&+p.price?'':' zero')},amt)),
-    i.memo?el('div',{class:'ap-memo'},i.memo):null);
+    i.memo?el('div',{class:'ap-memo'},i.memo):null,
+    thumbStrip(i));
+}
+/* 목록에서 후보마다 첫 사진을 나란히 보여 줘요 (고른 후보가 먼저) */
+function thumbStrip(i){
+  const opts=i.options.filter(o=>optPhotos(o).length).sort((a,b)=>(b.id===i.pick)-(a.id===i.pick));
+  if(!opts.length) return null;
+  return el('div',{class:'ap-strip'},...opts.map(o=>el('button',{class:'ap-th'+(o.id===i.pick?' on':''),type:'button',title:optLabel(o),'aria-label':`${optLabel(o)} 사진 보기`,onclick:()=>viewer(i,o,0)},
+    photoImg(o.photos[0],true),
+    el('span',{class:'ap-thcap'},optLabel(o)+(o.photos.length>1?` +${o.photos.length-1}`:'')))));
 }
 function editForm(i){
   const box=el('div',{class:'ap-opts'});
@@ -147,7 +245,7 @@ function editForm(i){
     return el('div',{class:'ap-opt'+(on?' on':'')},
       el('div',{class:'ap-ohead'},
         el('label',{class:'ap-pick'},el('input',{type:'radio',name:`ap-pick-${i.id}`,checked:on,onchange:()=>{ i.pick=o.id; if(i.status==='고민 중') i.status='결정'; st.value=i.status; draw(); }}),on?'이걸로 골랐어요':'이걸로 고르기'),
-        el('button',{class:'ib del',type:'button','aria-label':'후보 삭제',onclick:()=>{ i.options.splice(k,1); if(i.pick===o.id) i.pick=''; draw(); }},'✕')),
+        el('button',{class:'ib del',type:'button','aria-label':'후보 삭제',onclick:()=>{ if(optPhotos(o).length&&!confirm('이 후보와 사진을 지울까요?')) return; dropPhotoDocs(o.photos); i.options.splice(k,1); if(i.pick===o.id) i.pick=''; draw(); if(o.photos.length) save(); }},'✕')),
       el('div',{class:'ap-ogrid'},
         el('input',{type:'text',placeholder:'브랜드',list:'ap-brands',value:o.brand,id:`ap-b-${o.id}`,oninput:e=>o.brand=e.target.value}),
         el('input',{type:'text',placeholder:'모델명',value:o.model,id:`ap-m-${o.id}`,oninput:e=>o.model=e.target.value}),
@@ -155,8 +253,26 @@ function editForm(i){
         el('input',{type:'text',placeholder:'구매처',value:o.store,id:`ap-s-${o.id}`,oninput:e=>o.store=e.target.value}),
         el('input',{type:'url',class:'wide',placeholder:'상품 링크',value:o.link,id:`ap-l-${o.id}`,oninput:e=>o.link=e.target.value}),
         el('input',{type:'text',class:'wide',placeholder:'메모 (용량, 색상, 사은품 등)',value:o.memo,id:`ap-o-${o.id}`,oninput:e=>o.memo=e.target.value})),
+      photoEdit(o),
       o.link?el('a',{class:'ap-link',href:safeLink(o.link),target:'_blank',rel:'noopener'},'상품 페이지 열기'):null);
   }):[el('p',{class:'lnote'},'아직 후보가 없어요. 아래에서 브랜드·가격 후보를 추가하세요.')]));
+  function photoEdit(o){
+    const file=el('input',{type:'file',accept:'image/*',multiple:true,hidden:true,onchange:e=>{ const fs=e.target.files; addPhotos(o,fs,draw); e.target.value=''; }});
+    const wrap=el('div',{class:'ap-photos'},
+      ...optPhotos(o).map((p,k)=>el('div',{class:'ap-ph'},
+        el('button',{class:'ap-phimg',type:'button','aria-label':'사진 크게 보기',onclick:()=>viewer(i,o,k)},photoImg(p,true)),
+        el('button',{class:'ap-phdel',type:'button','aria-label':'사진 삭제',onclick:()=>{ if(!confirm('이 사진을 지울까요?')) return; o.photos.splice(k,1); dropPhotoDocs([p]); save(); draw(); }},'✕'))),
+      el('button',{class:'ap-phadd',type:'button',onclick:()=>file.click()},el('b',{},'+'),'사진'),
+      el('button',{class:'ap-phadd url',type:'button',title:'쇼핑몰 이미지 주소 붙이기',onclick:()=>{
+        const u=(prompt('이미지 주소를 붙여 넣으세요\n(쇼핑몰 사진에서 오른쪽 클릭 → 이미지 주소 복사)')||'').trim(); if(!u) return;
+        optPhotos(o).push({url:safeLink(u)}); save(); draw(); }},el('b',{},'🔗'),'주소'),
+      file);
+    return wrap;
+  }
+  /* 사진을 복사해서 후보 칸에 붙여 넣기(Ctrl+V)도 돼요 */
+  box.onpaste=e=>{ const fs=[...(e.clipboardData&&e.clipboardData.files||[])].filter(f=>/^image\//.test(f.type)); if(!fs.length) return;
+    const card=e.target.closest&&e.target.closest('.ap-opt'); const k=card?[...box.children].indexOf(card):-1; const o=i.options[k]; if(!o) return;
+    e.preventDefault(); addPhotos(o,fs,draw); };
   draw();
   const name=el('input',{type:'text',value:i.name,id:`ap-n-${i.id}`,placeholder:i.cat==='가구'?'가구 이름 (예: 침대)':CATS.slice(0,4).includes(i.cat)?'가전 이름 (예: 냉장고)':'품목 이름'});
   const CS=getCats(); const cat=el('select',{id:`ap-c-${i.id}`},...CS.map(c=>el('option',{value:c},c))); cat.value=CS.includes(i.cat)?i.cat:CS[0];
@@ -171,7 +287,7 @@ function editForm(i){
     el('div',{class:'llab'},'후보 · 브랜드와 가격을 적고 하나를 고르세요'),box,
     el('button',{class:'chip',type:'button',onclick:()=>{ const o=newOpt(); i.options.push(o); draw(); setTimeout(()=>{ const b=document.getElementById(`ap-b-${o.id}`); b&&b.focus(); },0); }},'후보 추가'),
     el('div',{class:'lbtns'},
-      el('button',{class:'chip del',type:'button',onclick:()=>{ if(!confirm(`'${i.name||'이 품목'}'을 지울까요?`)) return; state.items=state.items.filter(x=>x.id!==i.id); editingId=null; save(); render(); }},'품목 삭제'),
+      el('button',{class:'chip del',type:'button',onclick:()=>{ if(!confirm(`'${i.name||'이 품목'}'을 지울까요?`)) return; i.options.forEach(o=>dropPhotoDocs(o.photos)); state.items=state.items.filter(x=>x.id!==i.id); editingId=null; save(); render(); }},'품목 삭제'),
       el('button',{class:'btn',type:'submit'},'저장')));
   form.onsubmit=e=>{ e.preventDefault(); i.name=name.value.trim(); i.cat=cat.value; i.status=st.value; i.memo=memo.value.trim();
     i.options.forEach(o=>{ o.brand=o.brand.trim(); o.model=o.model.trim(); o.store=o.store.trim(); o.link=o.link.trim(); o.memo=o.memo.trim(); });
@@ -185,7 +301,7 @@ const view={
     try{ const s=JSON.parse(localStorage.getItem(LS)); if(s&&Array.isArray(s.items)) state=s; }catch(e){}
     if(!state) state=fresh();
     render(); sync(); },
-  close(){ if(unsub){ unsub(); unsub=null; } if(pending) flush(); root=null; editingId=null; },
+  close(){ const lb=document.querySelector('.ap-lb'); if(lb) lb.remove(); if(unsub){ unsub(); unsub=null; } if(pending) flush(); root=null; editingId=null; },
   sync(){ if(root) sync(); },
 };
 window.VIEWS=Object.assign(window.VIEWS||{},{appliances:view});

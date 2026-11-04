@@ -57,5 +57,10 @@ service cloud.firestore {
     match /shared/home/pages/{page} {
       allow read, write: if can(page);
     }
+    // 그 메뉴에 붙는 사진(신혼 가전 후보 사진 등): 메뉴 권한이 있으면 보고 올리고 지울 수 있어요.
+    match /shared/home/pages/{page}/photos/{id} {
+      allow read, delete: if can(page);
+      allow create, update: if can(page) && request.resource.data.d is string && request.resource.data.d.size() < 1000000;
+    }
   }
 }
