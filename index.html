@@ -532,6 +532,22 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .ap-memo{font-size:.8rem;color:var(--muted);white-space:pre-line;padding-bottom:2px}
 .ap-over{color:var(--danger)}
 .ap-fields{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) minmax(0,1fr);gap:8px}
+.ap-mallf{display:flex;align-items:center;gap:8px;font-size:.9rem;cursor:pointer;align-self:end;padding-bottom:8px}.ap-mallf input{accent-color:var(--accent);width:18px;height:18px;margin:0}
+.ap-tiles{grid-template-columns:repeat(4,minmax(0,1fr))}
+.ap-sep{flex:none;width:1px;align-self:stretch;background:var(--line);margin:4px 2px}
+.ap-lochead{display:flex;align-items:center;gap:8px;padding:2px 0;border:0;background:none;font:inherit;color:inherit;cursor:pointer;text-align:left}
+.ap-lochead h2{margin:0}.ap-caret{width:14px;color:var(--muted);font-size:.85rem}
+.ap-loc.closed .lbar{margin-bottom:0}
+.ap-kind{border-left:2px solid var(--line);margin:4px 0 12px 6px;padding-left:12px}
+.ap-khead{display:flex;align-items:center;gap:8px;padding:2px 0 4px}
+.ap-kname{font-size:.78rem;font-weight:700;border-radius:6px;padding:2px 8px;background:var(--bg);border:1px solid var(--line)}
+.ap-kname[data-k="가전"]{background:var(--blue-soft);color:var(--blue);border-color:transparent}
+.ap-kname[data-k="가구"]{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.ap-kcnt{font-size:.78rem;color:var(--muted)}.ap-ksum{margin-left:auto;font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.ap-kadd{margin-top:4px;font-size:.8rem}
+.ap-mall{font-size:.72rem;border-radius:999px;padding:1px 8px;background:rgba(230,160,0,.18);color:#a86d00;white-space:nowrap}
+.ap-st[data-st="이미 있음"]{background:var(--line);color:var(--muted);border-color:transparent}
+.ap-have .wname{color:var(--muted)}.ap-have .wrow{opacity:.75}
 .ap-opts{display:grid;gap:8px}
 .ap-opt{border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:grid;gap:6px;background:var(--bg)}
 .ap-opt.on{border-color:var(--accent);background:var(--accent-soft)}
@@ -565,7 +581,7 @@ img.ap-noimg{visibility:hidden}
 .ap-lbnav{position:absolute;top:50%;transform:translateY(-50%);width:40px;height:56px;border:0;border-radius:8px;background:rgba(255,255,255,.12);color:#fff;font-size:1.8rem;cursor:pointer}
 .ap-lbnav.prev{left:6px}.ap-lbnav.next{right:6px}
 .wtiles .lin input{font:inherit;font-size:.9rem;padding:6px 8px}
-@media (max-width:640px){.ap-ogrid{grid-template-columns:1fr 1fr}.ap-fields{grid-template-columns:1fr 1fr}.ap-fields .lfield:first-child{grid-column:1/-1}}
+@media (max-width:640px){.ap-ogrid{grid-template-columns:1fr 1fr}.ap-fields{grid-template-columns:1fr 1fr}.ap-fields .lfield:first-child{grid-column:1/-1}.ap-tiles{grid-template-columns:1fr 1fr}.ap-kind{margin-left:2px;padding-left:10px}}
 /* 자산관리 화면 테마: 따뜻한 가계부 노트 (자산관리 메뉴를 열면 body에 asset-theme가 붙어요) */
 body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--line:#ece2d0;--accent:#d9733b;--accent-soft:#fbe9dc;--blue:#4f7fe0;--danger:#d64545;
   --a-main:#fff3e6;--a-main-line:#f3d2b8;--a-g:#e3edff;--a-g-fg:#3f6fd8;--a-j:#ffe6ef;--a-j-fg:#d24f86;--a-k:#e4f5e6;--a-k-fg:#3f9a55;--a-track:#f1e9db;--a-tag:#f3ebdc;
@@ -696,7 +712,7 @@ body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--l
 <script src="realty.js?v=20261103d"></script>
 <script src="imjang.js?v=20261103d"></script>
 <script src="asset.js?v=20261103d"></script>
-<script src="appliance.js?v=20261104b"></script>
+<script src="appliance.js?v=20261104c"></script>
 <script src="stocks.js?v=20261103d"></script>
 <script src="admin.js?v=20261103d"></script>
 <script src="gcal.js?v=20261104a"></script>

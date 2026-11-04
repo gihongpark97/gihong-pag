@@ -1,27 +1,82 @@
-/* 신혼 가전/가구 메뉴: 가전·가구마다 후보(브랜드·모델·가격)를 여러 개 적고 하나를 골라요.
+/* 신혼 가전/가구 메뉴: 위치(주방·거실…) › 종류(가전·가구) › 품목 트리. 품목마다 후보(브랜드·모델·가격)를 여러 개 적고 하나를 골라요.
    저장 위치: Firestore shared/home/pages/appliances
-     {budget, cats:[분류 이름…], items:[{id,cat,name,status:'고민 중'|'결정'|'구매 완료',pick:후보id,memo,
+     {v:2, budget, locs:[위치 이름…], kinds:[종류 이름…], items:[{id,loc,kind,name,budget:예산금액,mall:복지몰로 살지,
+       status:'고민 중'|'결정'|'구매 완료'|'이미 있음',pick:후보id,memo,
        options:[{id,brand,model,price,store,link,memo,photos:[{id}|{url}]}]}]}
+     (예전 데이터의 cat·cats 필드는 그대로 남겨 둬요. v가 없으면 migrate()가 위치·종류를 채우고 표 품목을 합쳐요.)
    사진: 올린 사진은 줄여서 shared/home/pages/appliances/photos/{id}(크게)·{id}-t(작게)에 따로 저장돼요.
      {url}은 쇼핑몰 이미지 주소를 그대로 붙인 것. 로그인 없이 쓰면 localStorage 'hong.ap.photo.{id}'.
    로그인 없이 쓰면 이 기기(localStorage 'hong.appliances')에만 저장돼요. */
 (function(){
-const CATS=['대형 가전','주방 가전','생활 가전','소형 가전','가구'];
-const STATUS=['고민 중','결정','구매 완료'];
+const LOCS=['주방','거실','안방','작은방','베란다'];
+const KINDS=['가전','가구'];
+const NOLOC='위치 미정';
+const STATUS=['고민 중','결정','구매 완료','이미 있음'];
+const HAVE='이미 있음';
 const BRANDS=['삼성','LG','쿠쿠','쿠첸','SK매직','코웨이','청호나이스','위닉스','캐리어','위니아','다이슨','로보락','드리미','에코백스','샤오미','일렉트로룩스','밀레','보쉬','필립스','브라운','테팔','발뮤다','드롱기','브레빌','네스프레소','신일','한일','보아르','한샘','이케아','일룸','리바트','까사미아','시몬스','에이스침대','시디즈','데스커'];
-const SEED=[
-  ['대형 가전',['냉장고','김치냉장고','세탁기','건조기','TV','에어컨']],
-  ['주방 가전',['식기세척기','인덕션','전자레인지','에어프라이어','전기밥솥','정수기','커피머신']],
-  ['생활 가전',['로봇청소기','무선청소기','공기청정기','제습기','의류관리기']],
-  ['소형 가전',['헤어드라이어','다리미','전기포트']],
-  ['가구',['침대','매트리스','소파','식탁','옷장','책상','TV장']],
+/* 홍이가 정리한 표: [위치, 종류, 물품, 예산금액(숫자) | '복지몰' | 'o'(이미 있음)] */
+const TABLE=[
+  ['주방','가전','냉장고',2500000],['주방','가전','인덕션','복지몰'],['주방','가전','정수기','복지몰'],['주방','가전','식기세척기','복지몰'],
+  ['주방','가전','밥솥','복지몰'],['주방','가전','전자레인지','o'],['주방','가전','에어프라이어','o'],
+  ['주방','가구','식탁',200000],['주방','가구','의자',200000],['주방','가구','식기, 도구',0],
+  ['거실','가전','공기청정기','복지몰'],['거실','가전','선풍기','o'],['거실','가전','TV','o'],['거실','가전','청소기','o'],['거실','가전','로봇청소기',0],
+  ['거실','가구','소파, 쿠션',1000000],['거실','가구','미니 테이블',0],
+  ['안방','가전','조명',200000],['안방','가구','침대',1500000],['안방','가구','옷장',1000000],['안방','가구','화장대',500000],
+  ['작은방','가전','컴퓨터','o'],['작은방','가구','책상',0],['작은방','가구','의자',0],['작은방','가구','책장',200000],['작은방','가구','행거',200000],
+  ['베란다','가전','세탁기',2500000],
 ];
+/* 예전 이름과 표 이름이 다른 것 */
+const ALIAS={'밥솥':['전기밥솥'],'소파, 쿠션':['소파','쇼파'],'청소기':['무선청소기'],'식기, 도구':['식기','도구']};
+/* 표에 없는 예전 품목은 이름으로 위치를 짐작해요 */
+const GUESS={'김치냉장고':'주방','커피머신':'주방','전기포트':'주방','에어컨':'거실','TV장':'거실','거실장':'거실','매트리스':'안방','의류관리기':'안방','서랍장':'안방','헤어드라이어':'안방','건조기':'베란다','제습기':'베란다','다리미':'베란다'};
+/* 예전 기본 품목(손대지 않았으면 표로 바꿀 때 정리해요) */
+const OLD_SEED=['냉장고','김치냉장고','세탁기','건조기','TV','에어컨','식기세척기','인덕션','전자레인지','에어프라이어','전기밥솥','정수기','커피머신','로봇청소기','무선청소기','공기청정기','제습기','의류관리기','헤어드라이어','다리미','전기포트','침대','매트리스','소파','식탁','옷장','책상','TV장'];
+const OLD_GAJEON=['대형 가전','주방 가전','생활 가전','소형 가전'];
 const nid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 const newOpt=()=>({id:nid(),brand:'',model:'',price:0,store:'',link:'',memo:''});
-const fresh=()=>({budget:0,cats:[...CATS],items:SEED.flatMap(([cat,names])=>names.map(name=>({id:nid(),cat,name,status:'고민 중',pick:'',memo:'',options:[]})))});
+const newItem=(loc,kind,name='')=>({id:nid(),loc,kind,name,budget:0,mall:false,status:'고민 중',pick:'',memo:'',options:[]});
+function fromTable([loc,kind,name,b],k){ const i=newItem(loc,kind,name); i.id='t'+k;
+  if(b==='o') i.status=HAVE; else if(b==='복지몰') i.mall=true; else i.budget=+b||0; return i; }
+const fresh=()=>({v:2,budget:0,locs:[...LOCS],kinds:[...KINDS],items:TABLE.map(fromTable)});
+const untouched=i=>!(i.options||[]).length&&!i.memo&&!i.pick&&(i.status||'고민 중')==='고민 중';
+/* 예전(분류만 있던) 데이터 → 위치·종류 트리. 고른 후보·사진·메모는 그대로 두고 표 품목을 합쳐요. */
+function migrate(s){
+  if(!s||!Array.isArray(s.items)) return false;
+  let changed=false;
+  s.items.forEach(i=>{ if(!Array.isArray(i.options)) i.options=[]; });
+  if(!s.v){
+    const left=[...s.items], out=[];
+    TABLE.forEach((row,k)=>{
+      const [loc,kind,name,b]=row, names=[name,...(ALIAS[name]||[])];
+      let at=left.findIndex(i=>i.id==='t'+k);
+      if(at<0) at=left.findIndex(i=>!i.loc&&names.includes((i.name||'').trim()));
+      if(at<0){ out.push(fromTable(row,k)); return; }
+      const i=left.splice(at,1)[0], t=fromTable(row,k), blank=untouched(i);
+      i.loc=loc; i.kind=kind; if(blank) i.name=name;
+      if(!+i.budget) i.budget=t.budget; if(i.mall==null) i.mall=t.mall;
+      if(t.status===HAVE&&blank) i.status=HAVE;
+      out.push(i);
+    });
+    left.forEach(i=>{ if(!i.loc&&untouched(i)&&OLD_SEED.includes(i.name)) return; out.push(i); });
+    s.items=out; s.locs=Array.isArray(s.locs)&&s.locs.length?s.locs:[...LOCS]; s.v=2; changed=true;
+  }
+  if(!Array.isArray(s.locs)||!s.locs.length){ s.locs=[...LOCS]; changed=true; }
+  if(!Array.isArray(s.kinds)||!s.kinds.length){
+    const extra=(Array.isArray(s.cats)?s.cats:[]).filter(c=>c!=='가구'&&!OLD_GAJEON.includes(c));
+    s.kinds=[...KINDS,...extra]; changed=true; }
+  s.items.forEach(i=>{
+    if(!i.kind){ i.kind=i.cat==='가구'?'가구':(!i.cat||OLD_GAJEON.includes(i.cat))?'가전':i.cat; changed=true; }
+    if(i.loc==null){ i.loc=GUESS[i.name]||''; changed=true; }
+    if(i.budget==null){ i.budget=0; changed=true; }
+    if(i.mall==null){ i.mall=false; changed=true; }
+  });
+  return changed;
+}
 
-const LS='hong.appliances';
+const LS='hong.appliances', FOLD='hong.ap.fold';
 let state=null, root=null, ref=null, unsub=null, saveT=null, saving=false, pending=false, editingId=null, filter='전체';
+let fold=new Set(); try{ fold=new Set(JSON.parse(localStorage.getItem(FOLD))||[]); }catch(e){}
+const saveFold=()=>{ try{ localStorage.setItem(FOLD,JSON.stringify([...fold])); }catch(e){} };
 
 const won=v=>Math.round(v||0).toLocaleString('ko-KR')+'원';
 function eok(v){ v=Math.round(v||0); const neg=v<0; v=Math.abs(v); const e=Math.floor(v/1e8), m=Math.round((v%1e8)/1e4); let s=e?`${e}억`:''; if(m) s+=(s?' ':'')+`${m.toLocaleString('ko-KR')}만`; return (neg?'-':'')+(s||(v?v.toLocaleString('ko-KR'):'0'))+'원'; }
@@ -39,30 +94,39 @@ const pickedSum=list=>list.reduce((a,i)=>{ const p=picked(i); return a+(p?+p.pri
 const safeLink=u=>{ u=String(u||'').trim(); if(!u) return ''; if(!/^https?:\/\//i.test(u)) u='https://'+u; return u; };
 const optPhotos=o=>Array.isArray(o.photos)?o.photos:(o.photos=[]);
 const optLabel=o=>[o.brand,o.model].filter(Boolean).join(' ')||'(이름 없는 후보)';
-/* 분류: state.cats(직접 추가한 순서) + 품목에만 남아 있는 분류 */
-function getCats(){ const base=Array.isArray(state.cats)&&state.cats.length?state.cats:CATS; return [...new Set([...base,...state.items.map(i=>i.cat).filter(Boolean)])]; }
-const reserved=n=>n==='전체'||STATUS.includes(n);
-function askCat(msg,def){
+const budgetSum=list=>list.reduce((a,i)=>a+(i.status===HAVE?0:+i.budget||0),0);
+/* 위치: state.locs(직접 추가한 순서) + 품목에만 남아 있는 위치. 종류도 같은 방식 */
+function getLocs(){ const base=Array.isArray(state.locs)&&state.locs.length?state.locs:LOCS; return [...new Set([...base,...state.items.map(i=>i.loc).filter(Boolean)])]; }
+function getKinds(){ const base=Array.isArray(state.kinds)&&state.kinds.length?state.kinds:KINDS; return [...new Set([...base,...state.items.map(i=>i.kind).filter(Boolean)])]; }
+const reserved=n=>n==='전체'||n===NOLOC||STATUS.includes(n)||getKinds().includes(n);
+function askLoc(msg,def){
   const n=(prompt(msg,def||'')||'').trim(); if(!n) return null;
-  if(reserved(n)){ alert(`'${n}'은(는) 분류 이름으로 쓸 수 없어요.`); return null; }
+  if(reserved(n)&&n!==def){ alert(`'${n}'은(는) 위치 이름으로 쓸 수 없어요.`); return null; }
   return n;
 }
-function addCat(){
-  const n=askCat('새 분류 이름 (예: 욕실 용품, 침구)'); if(!n) return;
-  const cats=getCats(); if(cats.includes(n)){ alert('이미 있는 분류예요.'); return; }
-  state.cats=[...cats,n]; filter=n; editingId=null; save(); render();
+function addLoc(){
+  const n=askLoc('새 위치 이름 (예: 욕실, 현관, 드레스룸)'); if(!n) return;
+  const locs=getLocs(); if(locs.includes(n)){ alert('이미 있는 위치예요.'); return; }
+  state.locs=[...locs,n]; filter=n; editingId=null; save(); render();
 }
-function renameCat(c){
-  const n=askCat('분류 이름 바꾸기',c); if(!n||n===c) return;
-  const cats=getCats(); if(cats.includes(n)){ alert('이미 있는 분류예요.'); return; }
-  state.cats=cats.map(x=>x===c?n:x); state.items.forEach(i=>{ if(i.cat===c) i.cat=n; });
+function renameLoc(c){
+  const n=askLoc('위치 이름 바꾸기',c); if(!n||n===c) return;
+  const locs=getLocs(); if(locs.includes(n)){ alert('이미 있는 위치예요.'); return; }
+  state.locs=locs.map(x=>x===c?n:x); state.items.forEach(i=>{ if(i.loc===c) i.loc=n; });
+  if(fold.has(c)){ fold.delete(c); fold.add(n); saveFold(); }
   if(filter===c) filter=n; save(); render();
 }
-function deleteCat(c){
-  const n=state.items.filter(i=>i.cat===c).length;
-  if(n){ alert(`'${c}'에 품목이 ${n}개 있어요. 품목을 지우거나 다른 분류로 옮긴 뒤에 지울 수 있어요.`); return; }
-  if(!confirm(`'${c}' 분류를 지울까요?`)) return;
-  state.cats=getCats().filter(x=>x!==c); if(filter===c) filter='전체'; save(); render();
+function deleteLoc(c){
+  const n=state.items.filter(i=>i.loc===c).length;
+  if(n){ alert(`'${c}'에 품목이 ${n}개 있어요. 품목을 지우거나 다른 위치로 옮긴 뒤에 지울 수 있어요.`); return; }
+  if(!confirm(`'${c}' 위치를 지울까요?`)) return;
+  state.locs=getLocs().filter(x=>x!==c); if(filter===c) filter='전체'; save(); render();
+}
+function addKind(){
+  const n=(prompt('새 종류 이름 (예: 소품, 침구)')||'').trim(); if(!n) return null;
+  if(n==='전체'||n===NOLOC||STATUS.includes(n)||getLocs().includes(n)){ alert(`'${n}'은(는) 종류 이름으로 쓸 수 없어요.`); return null; }
+  if(!getKinds().includes(n)) state.kinds=[...getKinds(),n];
+  return n;
 }
 
 /* ---------- 저장 ---------- */
@@ -87,7 +151,9 @@ function sync(){
   unsub=ref.onSnapshot(snap=>{
     if(snap.metadata.hasPendingWrites||pending||saving) return;
     const d=snap.exists?snap.data():null;
-    if(d&&Array.isArray(d.items)){ state={budget:+d.budget||0,cats:Array.isArray(d.cats)?d.cats:null,items:d.items}; try{ localStorage.setItem(LS,JSON.stringify(state)); }catch(e){} }
+    if(d&&Array.isArray(d.items)){ const {updatedAt,...rest}=d; state={...rest,budget:+d.budget||0};
+      if(migrate(state)&&!snap.metadata.fromCache) save(); // 예전 데이터를 위치 트리로 바꿨으면 서버 내용 기준으로 한 번 저장
+      else try{ localStorage.setItem(LS,JSON.stringify(state)); }catch(e){} }
     else if(!snap.metadata.fromCache){ pending=true; flush(); } // 처음 로그인: 이 기기 내용을 올려요
     if(root&&!root.contains(document.activeElement)) render();
     setStatus('모든 기기에 저장됨');
@@ -183,48 +249,66 @@ function viewer(i,startOpt,startIdx){
 /* ---------- 화면 ---------- */
 function render(){
   if(!root) return;
-  const items=state.items, total=pickedSum(items), bought=pickedSum(items.filter(i=>i.status==='구매 완료'));
-  const undecided=items.filter(i=>!picked(i)).length, left=state.budget-total;
-  const leftMsg=()=>{ const l=state.budget-pickedSum(state.items); return state.budget?(l>=0?`${eok(l)} 남음`:`${eok(-l)} 초과`):'예산을 적어 보세요'; };
+  const items=state.items, need=items.filter(i=>i.status!==HAVE), total=pickedSum(need), bought=pickedSum(need.filter(i=>i.status==='구매 완료'));
+  const undecided=need.filter(i=>!picked(i)).length, left=state.budget-total, plan=budgetSum(items);
+  const leftMsg=()=>{ const l=state.budget-pickedSum(state.items.filter(i=>i.status!==HAVE)); return state.budget?(l>=0?`${eok(l)} 남음`:`${eok(-l)} 초과`):'예산을 적어 보세요'; };
   const msg=el('div',{class:'llab'+(state.budget&&left<0?' ap-over':'')},leftMsg());
-  const budget=moneyInput(state.budget,n=>{ state.budget=n; save(); msg.textContent=leftMsg(); msg.classList.toggle('ap-over',!!n&&n<pickedSum(state.items)); },{id:'ap-budget','aria-label':'가전/가구 예산',placeholder:'예산 입력'});
-  const leftTile=()=>el('div',{class:'ltile'},el('div',{class:'ltt'},el('b',{},'예산')),el('div',{class:'lin'},budget),msg);
+  const budget=moneyInput(state.budget,n=>{ state.budget=n; save(); msg.textContent=leftMsg(); msg.classList.toggle('ap-over',!!n&&n<pickedSum(state.items.filter(i=>i.status!==HAVE))); },{id:'ap-budget','aria-label':'가전/가구 예산',placeholder:'예산 입력'});
+  const mallN=need.filter(i=>i.mall).length, haveN=items.length-need.length;
   const head=el('div',{class:'lhead'},
     el('div',{},el('div',{class:'crumb'},'신혼'),el('h1',{},'가전/가구 리스트'),
-      el('div',{class:'sum'},`품목 ${items.length}개 · 고른 것 ${items.length-undecided}개 · 구매 완료 ${items.filter(i=>i.status==='구매 완료').length}개`)),
+      el('div',{class:'sum'},`살 것 ${need.length}개 · 고른 것 ${need.length-undecided}개 · 구매 완료 ${need.filter(i=>i.status==='구매 완료').length}개`+(haveN?` · 이미 있음 ${haveN}개`:''))),
     el('div',{class:'acct'},el('div',{class:'sync',id:'apsync'})));
-  const tiles=el('div',{class:'ltiles wtiles'},
+  const tiles=el('div',{class:'ltiles wtiles ap-tiles'},
+    el('div',{class:'ltile'},el('div',{class:'ltt'},el('b',{},'예산금액 합계')),el('div',{class:'wbig'},eok(plan)),el('div',{class:'llab'},mallN?`복지몰 ${mallN}개는 따로`:'품목별 예산 합')),
     el('div',{class:'ltile'},el('div',{class:'ltt'},el('b',{},'고른 품목 합계')),el('div',{class:'wbig'},eok(total)),el('div',{class:'llab'},undecided?`아직 안 고른 품목 ${undecided}개`:'모두 골랐어요')),
     el('div',{class:'ltile'},el('div',{class:'ltt'},el('b',{},'구매 완료')),el('div',{class:'wbig'},eok(bought)),el('div',{class:'llab'},`남은 결제 ${eok(total-bought)}`)),
-    leftTile());
-  const CS=getCats(); if(filter!=='전체'&&!CS.includes(filter)&&!STATUS.includes(filter)) filter='전체';
-  const chips=el('div',{class:'lbtns ap-filter'},...['전체',...CS,...STATUS].map(f=>el('button',{class:'chip',type:'button','aria-pressed':String(filter===f),onclick:()=>{filter=f;editingId=null;render();}},f)),
-    el('button',{class:'chip ap-addcat',type:'button',onclick:addCat},'+ 분류 추가'));
-  const shown=i=>filter==='전체'||i.cat===filter||i.status===filter;
-  const cats=CS;
-  const secs=cats.map(cat=>{ const list=items.filter(i=>i.cat===cat&&shown(i));
-    if(!list.length&&filter!=='전체'&&filter!==cat) return null;
-    return el('section',{class:'lcard wsec'},
-      el('div',{class:'lbar'},el('h2',{},cat),
+    el('div',{class:'ltile'},el('div',{class:'ltt'},el('b',{},'전체 예산')),el('div',{class:'lin'},budget),msg));
+  const LO=getLocs(), KI=getKinds(); if(filter!=='전체'&&!LO.includes(filter)&&!KI.includes(filter)&&!STATUS.includes(filter)) filter='전체';
+  const chip=f=>el('button',{class:'chip',type:'button','aria-pressed':String(filter===f),onclick:()=>{filter=f;editingId=null;render();}},f);
+  const chips=el('div',{class:'lbtns ap-filter'},chip('전체'),...LO.map(chip),el('span',{class:'ap-sep'}),...KI.map(chip),el('span',{class:'ap-sep'}),...STATUS.map(chip),
+    el('button',{class:'chip ap-addcat',type:'button',onclick:addLoc},'+ 위치 추가'));
+  const shown=i=>filter==='전체'||i.loc===filter||i.kind===filter||i.status===filter;
+  const locs=[...LO]; if(items.some(i=>!i.loc)) locs.push(NOLOC);
+  const secs=locs.map(loc=>{
+    const key=loc===NOLOC?'':loc, all=items.filter(i=>(i.loc||'')===key), list=all.filter(shown);
+    if(!list.length&&filter!=='전체'&&filter!==loc) return null;
+    const closed=fold.has(loc)&&filter!==loc, kinds=[...new Set([...KI.filter(k=>(loc!==NOLOC&&KINDS.includes(k))||all.some(i=>i.kind===k)),...all.map(i=>i.kind)])];
+    const toggle=()=>{ fold.has(loc)?fold.delete(loc):fold.add(loc); saveFold(); render(); };
+    const groups=closed?[]:kinds.map(kind=>{
+      const g=list.filter(i=>i.kind===kind);
+      if(!g.length&&filter!=='전체'&&filter!==loc&&filter!==kind) return null;
+      return el('div',{class:'ap-kind'},
+        el('div',{class:'ap-khead'},el('span',{class:'ap-kname','data-k':kind},kind),el('span',{class:'ap-kcnt'},`${g.length}개`),
+          el('span',{class:'ap-ksum'},budgetSum(g)?`예산 ${eok(budgetSum(g))}`:'')),
+        el('div',{class:'wlist'},...g.map(i=>i.id===editingId?editForm(i):itemRow(i))),
+        el('button',{class:'chip ap-kadd',type:'button',onclick:()=>{ const i=newItem(key,kind); i.options.push(newOpt()); items.push(i); editingId=i.id; if(fold.has(loc)){fold.delete(loc);saveFold();} render(); }},`+ ${loc===NOLOC?'':loc+' '}${kind} 추가`));
+    }).filter(Boolean);
+    const plan=budgetSum(all), pick=pickedSum(all.filter(i=>i.status!==HAVE));
+    return el('section',{class:'lcard wsec ap-loc'+(closed?' closed':'')},
+      el('div',{class:'lbar'},
+        el('button',{class:'ap-lochead',type:'button','aria-expanded':String(!closed),onclick:toggle},
+          el('span',{class:'ap-caret'},closed?'▸':'▾'),el('h2',{},loc),el('span',{class:'ap-kcnt'},`${all.length}개`)),
         el('span',{class:'ap-catbtns'},
-          el('button',{class:'ib',type:'button','aria-label':`${cat} 이름 바꾸기`,title:'이름 바꾸기',onclick:()=>renameCat(cat)},'✎'),
-          el('button',{class:'ib del',type:'button','aria-label':`${cat} 분류 삭제`,title:'분류 삭제',onclick:()=>deleteCat(cat)},'✕'),
-          el('span',{class:'wtot'},won(pickedSum(list))))),
-      el('div',{class:'wlist'},...list.map(i=>i.id===editingId?editForm(i):itemRow(i))),
-      el('button',{class:'chip',type:'button',onclick:()=>{ const i={id:nid(),cat,name:'',status:'고민 중',pick:'',memo:'',options:[newOpt()]}; items.push(i); editingId=i.id; render(); }},cat==='가구'?'가구 추가':CATS.slice(0,4).includes(cat)?'가전 추가':'품목 추가'));
+          loc!==NOLOC?el('button',{class:'ib',type:'button','aria-label':`${loc} 이름 바꾸기`,title:'이름 바꾸기',onclick:()=>renameLoc(loc)},'✎'):null,
+          loc!==NOLOC?el('button',{class:'ib del',type:'button','aria-label':`${loc} 위치 삭제`,title:'위치 삭제',onclick:()=>deleteLoc(loc)},'✕'):null,
+          el('span',{class:'wtot'},[plan?`예산 ${eok(plan)}`:'',pick?`고른 ${eok(pick)}`:''].filter(Boolean).join(' · ')))),
+      ...groups);
   }).filter(Boolean);
   const dl=el('datalist',{id:'ap-brands'},...BRANDS.map(b=>el('option',{value:b})));
-  root.replaceChildren(head,tiles,chips,...secs,dl,el('p',{class:'lnote'},'품목을 누르면 후보(브랜드·모델·가격·사진)를 여러 개 적고 비교할 수 있어요. 사진을 누르면 크게 넘겨 보며 비교해요. 고른 후보의 가격이 합계에 들어가요.'));
+  root.replaceChildren(head,tiles,chips,...secs,dl,el('p',{class:'lnote'},'위치 › 가전/가구 › 품목 순서로 묶었어요. 위치 이름을 누르면 접고 펼 수 있어요. 품목을 누르면 예산·복지몰 여부와 후보(브랜드·모델·가격·사진)를 적고 비교할 수 있어요. 고른 후보의 가격이 합계에 들어가고, \'이미 있음\'은 합계에서 빠져요.'));
   setStatus(ref?'모든 기기에 저장됨':'이 기기에만 저장됨');
 }
 function itemRow(i){
-  const p=picked(i), ps=prices(i);
-  const amt=p&&+p.price?won(p.price):ps.length?(Math.min(...ps)===Math.max(...ps)?won(ps[0]):`${eok(Math.min(...ps))} ~ ${eok(Math.max(...ps))}`):'미정';
-  const sub=p?optLabel(p)+(p.store?` · ${p.store}`:''):i.options.length?`후보 ${i.options.length}개 비교 중`:'후보 없음';
-  return el('div',{class:'witem'},
+  const p=picked(i), ps=prices(i), have=i.status===HAVE;
+  const amt=have?'':p&&+p.price?won(p.price):ps.length?(Math.min(...ps)===Math.max(...ps)?won(ps[0]):`${eok(Math.min(...ps))} ~ ${eok(Math.max(...ps))}`):+i.budget?`예산 ${eok(i.budget)}`:i.mall?'복지몰':'미정';
+  const sub=have?'안 사도 돼요':p?optLabel(p)+(p.store?` · ${p.store}`:''):i.options.length?`후보 ${i.options.length}개 비교 중`:'후보 없음';
+  return el('div',{class:'witem'+(have?' ap-have':'')},
     el('button',{class:'wrow',type:'button',onclick:()=>{editingId=i.id;render();}},
       el('span',{class:'ap-main'},
-        el('span',{class:'ap-top'},el('span',{class:'wname'},i.name||'(이름 없음)'),el('span',{class:'ap-st','data-st':i.status},i.status)),
+        el('span',{class:'ap-top'},el('span',{class:'wname'},i.name||'(이름 없음)'),
+          i.mall&&!have?el('span',{class:'ap-mall'},'복지몰'):null,
+          el('span',{class:'ap-st','data-st':i.status},i.status)),
         el('span',{class:'ap-sub'+(p?' on':'')},sub)),
       el('span',{class:'wamt'+(p&&+p.price?'':' zero')},amt)),
     i.memo?el('div',{class:'ap-memo'},i.memo):null,
@@ -274,22 +358,32 @@ function editForm(i){
     const card=e.target.closest&&e.target.closest('.ap-opt'); const k=card?[...box.children].indexOf(card):-1; const o=i.options[k]; if(!o) return;
     e.preventDefault(); addPhotos(o,fs,draw); };
   draw();
-  const name=el('input',{type:'text',value:i.name,id:`ap-n-${i.id}`,placeholder:i.cat==='가구'?'가구 이름 (예: 침대)':CATS.slice(0,4).includes(i.cat)?'가전 이름 (예: 냉장고)':'품목 이름'});
-  const CS=getCats(); const cat=el('select',{id:`ap-c-${i.id}`},...CS.map(c=>el('option',{value:c},c))); cat.value=CS.includes(i.cat)?i.cat:CS[0];
-  const st=el('select',{id:`ap-t-${i.id}`},...STATUS.map(c=>el('option',{value:c},c))); st.value=i.status;
+  const name=el('input',{type:'text',value:i.name,id:`ap-n-${i.id}`,placeholder:i.kind==='가구'?'가구 이름 (예: 침대)':i.kind==='가전'?'가전 이름 (예: 냉장고)':'품목 이름'});
+  const LO=getLocs(); const loc=el('select',{id:`ap-w-${i.id}`},...LO.map(c=>el('option',{value:c},c)),el('option',{value:''},NOLOC)); loc.value=LO.includes(i.loc)?i.loc:'';
+  const kindSel=()=>{ const KI=getKinds(); const k=el('select',{id:`ap-c-${i.id}`},...KI.map(c=>el('option',{value:c},c)),el('option',{value:'__new'},'+ 새 종류…')); k.value=KI.includes(i.kind)?i.kind:KI[0];
+    k.onchange=()=>{ if(k.value!=='__new') return; const n=addKind(); const nk=kindSel(); nk.value=n||k.dataset.prev||KI[0]; k.replaceWith(nk); kind=nk; };
+    k.onfocus=()=>{ k.dataset.prev=k.value; }; return k; };
+  let kind=kindSel();
+  const st=el('select',{id:`ap-t-${i.id}`},...STATUS.map(c=>el('option',{value:c},c))); st.value=STATUS.includes(i.status)?i.status:STATUS[0];
+  let bud=+i.budget||0; const budIn=moneyInput(bud,n=>bud=n,{id:`ap-a-${i.id}`,placeholder:'예산금액'});
+  const mall=el('input',{type:'checkbox',id:`ap-mall-${i.id}`,checked:!!i.mall});
   const memo=el('textarea',{id:`ap-x-${i.id}`,rows:'2',placeholder:'원하는 조건 (예: 4도어, 800L 이상, 화이트)'}); memo.value=i.memo||'';
   const form=el('form',{class:'ledit wedit'},
     el('div',{class:'ap-fields'},
       el('label',{class:'lfield'},el('span',{class:'llab'},'품목'),el('span',{class:'lin'},name)),
-      el('label',{class:'lfield'},el('span',{class:'llab'},'분류'),el('span',{class:'lin'},cat)),
-      el('label',{class:'lfield'},el('span',{class:'llab'},'상태'),el('span',{class:'lin'},st))),
+      el('label',{class:'lfield'},el('span',{class:'llab'},'위치'),el('span',{class:'lin'},loc)),
+      el('label',{class:'lfield'},el('span',{class:'llab'},'종류'),el('span',{class:'lin ap-kindwrap'},kind)),
+      el('label',{class:'lfield'},el('span',{class:'llab'},'상태'),el('span',{class:'lin'},st)),
+      el('label',{class:'lfield'},el('span',{class:'llab'},'예산금액'),el('span',{class:'lin'},budIn)),
+      el('label',{class:'lfield ap-mallf'},mall,el('span',{},'복지몰에서 살 거예요'))),
     el('label',{class:'lfield'},el('span',{class:'llab'},'원하는 조건'),memo),
     el('div',{class:'llab'},'후보 · 브랜드와 가격을 적고 하나를 고르세요'),box,
     el('button',{class:'chip',type:'button',onclick:()=>{ const o=newOpt(); i.options.push(o); draw(); setTimeout(()=>{ const b=document.getElementById(`ap-b-${o.id}`); b&&b.focus(); },0); }},'후보 추가'),
     el('div',{class:'lbtns'},
       el('button',{class:'chip del',type:'button',onclick:()=>{ if(!confirm(`'${i.name||'이 품목'}'을 지울까요?`)) return; i.options.forEach(o=>dropPhotoDocs(o.photos)); state.items=state.items.filter(x=>x.id!==i.id); editingId=null; save(); render(); }},'품목 삭제'),
       el('button',{class:'btn',type:'submit'},'저장')));
-  form.onsubmit=e=>{ e.preventDefault(); i.name=name.value.trim(); i.cat=cat.value; i.status=st.value; i.memo=memo.value.trim();
+  form.onsubmit=e=>{ e.preventDefault(); i.name=name.value.trim(); i.loc=loc.value; const kv=form.querySelector(`#ap-c-${i.id}`).value; if(kv&&kv!=='__new') i.kind=kv; i.status=st.value; i.budget=bud; i.mall=mall.checked;
+    if(i.loc&&fold.has(i.loc)){ fold.delete(i.loc); saveFold(); } i.memo=memo.value.trim();
     i.options.forEach(o=>{ o.brand=o.brand.trim(); o.model=o.model.trim(); o.store=o.store.trim(); o.link=o.link.trim(); o.memo=o.memo.trim(); });
     editingId=null; save(); render(); };
   setTimeout(()=>{ form.scrollIntoView({block:'nearest',behavior:'smooth'}); if(!i.name) name.focus({preventScroll:true}); },0);
@@ -298,7 +392,7 @@ function editForm(i){
 
 const view={
   open(container){ root=container;
-    try{ const s=JSON.parse(localStorage.getItem(LS)); if(s&&Array.isArray(s.items)) state=s; }catch(e){}
+    try{ const s=JSON.parse(localStorage.getItem(LS)); if(s&&Array.isArray(s.items)){ state=s; if(migrate(state)) try{ localStorage.setItem(LS,JSON.stringify(state)); }catch(e){} } }catch(e){}
     if(!state) state=fresh();
     render(); sync(); },
   close(){ const lb=document.querySelector('.ap-lb'); if(lb) lb.remove(); if(unsub){ unsub(); unsub=null; } if(pending) flush(); root=null; editingId=null; },
