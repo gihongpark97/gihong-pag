@@ -21,6 +21,7 @@ const newOpt=()=>({id:nid(),brand:'',model:'',price:0,store:'',link:'',memo:''})
 const fresh=()=>({budget:0,cats:[...CATS],items:SEED.flatMap(([cat,names])=>names.map(name=>({id:nid(),cat,name,status:'고민 중',pick:'',memo:'',options:[]})))});
 
 const LS='hong.appliances';
+let pasteTo=null; // 열려 있는 편집 폼: 붙여넣은 사진이 들어갈 곳
 let state=null, root=null, ref=null, unsub=null, saveT=null, saving=false, pending=false, editingId=null, filter='전체';
 
 const won=v=>Math.round(v||0).toLocaleString('ko-KR')+'원';
@@ -182,7 +183,7 @@ function viewer(i,startOpt,startIdx){
 
 /* ---------- 화면 ---------- */
 function render(){
-  if(!root) return;
+  if(!root) return; pasteTo=null;
   const items=state.items, total=pickedSum(items), bought=pickedSum(items.filter(i=>i.status==='구매 완료'));
   const undecided=items.filter(i=>!picked(i)).length, left=state.budget-total;
   const leftMsg=()=>{ const l=state.budget-pickedSum(state.items); return state.budget?(l>=0?`${eok(l)} 남음`:`${eok(-l)} 초과`):'예산을 적어 보세요'; };
@@ -242,7 +243,7 @@ function editForm(i){
   const box=el('div',{class:'ap-opts'});
   const draw=()=>box.replaceChildren(...(i.options.length?i.options.map((o,k)=>{
     const on=i.pick===o.id;
-    return el('div',{class:'ap-opt'+(on?' on':'')},
+    return el('div',{class:'ap-opt'+(on?' on':'')+(pasteTo&&pasteTo.o===o?' tgt':'')},
       el('div',{class:'ap-ohead'},
         el('label',{class:'ap-pick'},el('input',{type:'radio',name:`ap-pick-${i.id}`,checked:on,onchange:()=>{ i.pick=o.id; if(i.status==='고민 중') i.status='결정'; st.value=i.status; draw(); }}),on?'이걸로 골랐어요':'이걸로 고르기'),
         el('button',{class:'ib del',type:'button','aria-label':'후보 삭제',onclick:()=>{ if(optPhotos(o).length&&!confirm('이 후보와 사진을 지울까요?')) return; dropPhotoDocs(o.photos); i.options.splice(k,1); if(i.pick===o.id) i.pick=''; draw(); if(o.photos.length) save(); }},'✕')),
@@ -255,24 +256,32 @@ function editForm(i){
         el('input',{type:'text',class:'wide',placeholder:'메모 (용량, 색상, 사은품 등)',value:o.memo,id:`ap-o-${o.id}`,oninput:e=>o.memo=e.target.value})),
       photoEdit(o),
       o.link?el('a',{class:'ap-link',href:safeLink(o.link),target:'_blank',rel:'noopener'},'상품 페이지 열기'):null);
-  }):[el('p',{class:'lnote'},'아직 후보가 없어요. 아래에서 브랜드·가격 후보를 추가하세요.')]));
+  }):[el('p',{class:'lnote'},'아직 후보가 없어요. 아래에서 브랜드·가격 후보를 추가하세요. 캡처한 사진을 바로 붙여 넣으면(Ctrl+V) 새 후보로 들어가요.')]));
   function photoEdit(o){
+    const clip=el('button',{class:'ap-phadd',type:'button',title:'캡처한 사진 붙여넣기',onclick:async()=>{
+      mark(o);
+      try{ const fs=[]; for(const it of await navigator.clipboard.read()){ const t=it.types.find(x=>/^image\//.test(x)); if(t){ const b=await it.getType(t); fs.push(new File([b],'paste.'+t.split('/')[1],{type:t})); } }
+        if(fs.length) addPhotos(o,fs,draw); else alert('복사한 사진이 없어요. 화면을 캡처(Win+Shift+S)하거나 사진을 복사한 뒤 눌러 주세요.'); }
+      catch(e){ alert('여기서는 버튼으로 붙여 넣을 수 없어요. 이 후보 칸을 누르고 Ctrl+V(맥은 ⌘+V)를 눌러 주세요.'); } }},el('b',{},'📋'),'붙여넣기');
     const file=el('input',{type:'file',accept:'image/*',multiple:true,hidden:true,onchange:e=>{ const fs=e.target.files; addPhotos(o,fs,draw); e.target.value=''; }});
     const wrap=el('div',{class:'ap-photos'},
       ...optPhotos(o).map((p,k)=>el('div',{class:'ap-ph'},
         el('button',{class:'ap-phimg',type:'button','aria-label':'사진 크게 보기',onclick:()=>viewer(i,o,k)},photoImg(p,true)),
         el('button',{class:'ap-phdel',type:'button','aria-label':'사진 삭제',onclick:()=>{ if(!confirm('이 사진을 지울까요?')) return; o.photos.splice(k,1); dropPhotoDocs([p]); save(); draw(); }},'✕'))),
       el('button',{class:'ap-phadd',type:'button',onclick:()=>file.click()},el('b',{},'+'),'사진'),
+      clip,
       el('button',{class:'ap-phadd url',type:'button',title:'쇼핑몰 이미지 주소 붙이기',onclick:()=>{
         const u=(prompt('이미지 주소를 붙여 넣으세요\n(쇼핑몰 사진에서 오른쪽 클릭 → 이미지 주소 복사)')||'').trim(); if(!u) return;
         optPhotos(o).push({url:safeLink(u)}); save(); draw(); }},el('b',{},'🔗'),'주소'),
       file);
     return wrap;
   }
-  /* 사진을 복사해서 후보 칸에 붙여 넣기(Ctrl+V)도 돼요 */
-  box.onpaste=e=>{ const fs=[...(e.clipboardData&&e.clipboardData.files||[])].filter(f=>/^image\//.test(f.type)); if(!fs.length) return;
-    const card=e.target.closest&&e.target.closest('.ap-opt'); const k=card?[...box.children].indexOf(card):-1; const o=i.options[k]; if(!o) return;
-    e.preventDefault(); addPhotos(o,fs,draw); };
+  /* 캡처한 사진 붙여넣기(Ctrl+V): 마지막으로 누른 후보 칸에 들어가요 (후보가 하나면 거기, 없으면 새 후보) */
+  const cardOpt=t=>{ const c=t&&t.closest&&t.closest('.ap-opt'); const k=c?[...box.children].indexOf(c):-1; return i.options[k]||null; };
+  const mark=o=>{ pasteTo.o=o; [...box.children].forEach((c,k)=>c.classList.toggle('tgt',!!o&&i.options[k]===o)); };
+  box.addEventListener('pointerdown',e=>{ const o=cardOpt(e.target); if(o) mark(o); });
+  box.addEventListener('focusin',e=>{ const o=cardOpt(e.target); if(o) mark(o); });
+  pasteTo={i,draw,mark,o:null};
   draw();
   const name=el('input',{type:'text',value:i.name,id:`ap-n-${i.id}`,placeholder:i.cat==='가구'?'가구 이름 (예: 침대)':CATS.slice(0,4).includes(i.cat)?'가전 이름 (예: 냉장고)':'품목 이름'});
   const CS=getCats(); const cat=el('select',{id:`ap-c-${i.id}`},...CS.map(c=>el('option',{value:c},c))); cat.value=CS.includes(i.cat)?i.cat:CS[0];
@@ -295,6 +304,15 @@ function editForm(i){
   setTimeout(()=>{ form.scrollIntoView({block:'nearest',behavior:'smooth'}); if(!i.name) name.focus({preventScroll:true}); },0);
   return form;
 }
+
+document.addEventListener('paste',e=>{
+  const P=pasteTo; if(!root||!P||!root.contains(document.querySelector('.ap-opts'))) return;
+  const fs=[...(e.clipboardData&&e.clipboardData.files||[])].filter(f=>/^image\//.test(f.type)); if(!fs.length) return;
+  const {i,draw}=P; let o=P.o&&i.options.includes(P.o)?P.o:i.options.length===1?i.options[0]:i.options.find(x=>x.id===i.pick)||null;
+  if(!o&&!i.options.length){ o=newOpt(); i.options.push(o); }
+  if(!o){ alert('사진을 넣을 후보 칸을 먼저 한 번 눌러 주세요.'); return; }
+  e.preventDefault(); addPhotos(o,fs,()=>{ draw(); P.mark(o); });
+});
 
 const view={
   open(container){ root=container;
