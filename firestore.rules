@@ -19,9 +19,9 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['id', 'email', 'name', 'status', 'createdAt'])
         && request.resource.data.status == 'pending'
         && request.resource.data.email == request.auth.token.email);
-      // 본인은 자기 이름만 바꿀 수 있어요.
+      // 본인은 자기 이름과 메뉴 순서(navOrder)만 바꿀 수 있어요.
       allow update: if isAdmin() || (signedIn() && request.auth.uid == uid
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name']));
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'navOrder']));
       allow delete: if isAdmin();
     }
 

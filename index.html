@@ -158,6 +158,16 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .nav .leafbtn{padding-left:12px}
 .nav .leafbtn[aria-current="page"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
 .nav .n{margin-left:auto;font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.nav .nrow{display:flex;align-items:center;gap:2px}
+.nav .nrow>button:not(.grip){flex:1;min-width:0}
+.nav .grip{flex:none;width:32px;min-height:40px;padding:0;display:grid;place-items:center;color:var(--muted);cursor:grab;touch-action:none;border-radius:8px}
+.nav .grip:focus-visible{outline:2px solid var(--accent)}
+.nav.ordering .leafbtn,.nav.ordering .grp{cursor:default}
+.nav li.dragging>.nrow{background:var(--accent-soft);border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+.nav li.dragging .grip{cursor:grabbing}
+.navtools{display:flex;gap:6px;flex-wrap:wrap;padding:8px 8px 0}
+.navtools .chip{font-size:.8rem;min-height:30px}
+.navhint{font-size:.75rem;color:var(--muted);padding:6px 8px 0;margin:0}
 .topbar{display:none}
 .crumb{font-size:.8rem;color:var(--muted);letter-spacing:.02em;margin-bottom:2px}
 .scrim{display:none}
@@ -623,6 +633,8 @@ body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--l
 <aside class="side" id="side" aria-label="메뉴">
   <div class="brand">기홍이 홈페이지</div>
   <ul class="nav" id="nav"></ul>
+  <p class="navhint" id="navhint" hidden>⋮⋮ 손잡이를 끌어서 같은 줄 안에서 순서를 바꿔요.</p>
+  <div class="navtools"><button class="chip" id="navorder" type="button">메뉴 순서 바꾸기</button><button class="chip" id="navreset" type="button" hidden>기본 순서로</button></div>
   <div class="backup" id="acctbox" hidden>
     <div class="llab">내 계정</div>
     <div class="who" id="who"></div>
@@ -727,6 +739,7 @@ const ICON = {
   cal:'<svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1.8" y="2.8" width="10.4" height="9.4" rx="1.6" stroke="currentColor" stroke-width="1.4"/><path d="M1.8 5.8h10.4M4.6 1.6v2.4M9.4 1.6v2.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
   prev:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3.5L5.5 8l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   next:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 3.5L10.5 8 6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  grip:'<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor"><circle cx="5" cy="3" r="1.2"/><circle cx="9" cy="3" r="1.2"/><circle cx="5" cy="7" r="1.2"/><circle cx="9" cy="7" r="1.2"/><circle cx="5" cy="11" r="1.2"/><circle cx="9" cy="11" r="1.2"/></svg>',
   x:'<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3.5 3.5l7 7M10.5 3.5l-7 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
   del:'<svg width="17" height="17" viewBox="0 0 18 18" fill="none"><path d="M4 5h10M7.5 5V3.5h3V5M5.5 5l.7 9.5h5.6l.7-9.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
@@ -782,7 +795,7 @@ const ls = {
 };
 
 let tree = [];                 // [{id,text,done,children:[]}]
-let ui = Object.assign({collapsed:{}, hideDone:false, navClosed:{}, calView:false}, ls.get(LS_UI)||{});
+let ui = Object.assign({collapsed:{}, hideDone:false, navClosed:{}, navOrder:{}, calView:false}, ls.get(LS_UI)||{});
 let addingTo = null, editing = null, undoState = null, toastTimer = null;
 let docRef = null, saveTimer = null, saving = false, dirty = false, loaded = false;
 
@@ -1086,27 +1099,82 @@ async function flush(){
 
 /* ---------- menu ---------- */
 function count(list){ return list.reduce((a,n)=>{const t=stats(n);a.all+=t.all;a.done+=t.done;return a},{all:0,done:0}); }
+// 메뉴 순서: 같은 묶음(부모) 안에서 사람마다 원하는 순서로 바꿀 수 있어요.
+// ui.navOrder = { 부모id: [항목id...] }. 부모id는 맨 위가 '_root', 묶음은 '체크리스트/회사업무'처럼 경로, 항목id는 key 또는 묶음 경로예요.
+// 나중에 새로 생긴 메뉴는 저장된 순서에 없으니 맨 뒤에 붙어요.
+const navId=(m,path)=>m.key||[...path,m.label].join('/');
+const navParent=path=>path.length?path.join('/'):'_root';
+function navSorted(items,path){
+  const ord=(ui.navOrder||{})[navParent(path)]; if(!Array.isArray(ord)) return items;
+  const at=m=>{ const i=ord.indexOf(navId(m,path)); return i<0?1e6:i; };
+  return items.map((m,i)=>[m,i]).sort((a,b)=>(at(a[0])-at(b[0]))||(a[1]-b[1])).map(x=>x[0]);
+}
+let navOrdering=false;
 function renderNav(){
   const visible=m=>m.key?allowed(m.key):m.children.some(visible);
-  const build=(items,path)=>items.filter(visible).map(m=>{
+  const build=(items,path)=>navSorted(items,path).filter(visible).map(m=>{
     const li=document.createElement('li'); const b=document.createElement('button');
+    li.dataset.id=navId(m,path);
     if(m.key){
       b.className='leafbtn'; b.textContent=m.label; if(m.key===current) b.setAttribute('aria-current','page');
       const t=m.view?[]:(m.key===current?tree:(ls.get(cacheKey(m.key))||[])); const c=count(t);
       if(c.all){ const n=document.createElement('span'); n.className='n'; n.textContent=`${c.all-c.done}`; n.title='남은 할 일'; b.append(n); }
-      b.onclick=()=>{ location.hash=m.key; $('shell').classList.remove('open'); };
-      li.append(b);
+      b.onclick=()=>{ if(navOrdering) return; location.hash=m.key; $('shell').classList.remove('open'); };
     } else {
       const id=[...path,m.label].join('/'), open=!ui.navClosed[id];
       b.className='grp'; b.innerHTML=ICON.chev; b.append(document.createTextNode(m.label)); b.setAttribute('aria-expanded',open);
       b.onclick=()=>{ if(open) ui.navClosed[id]=1; else delete ui.navClosed[id]; ls.set(LS_UI,ui); renderNav(); };
-      li.append(b);
-      if(open){ const ul=document.createElement('ul'); ul.append(...build(m.children,[...path,m.label])); li.append(ul); }
     }
+    if(navOrdering){
+      const row=document.createElement('div'); row.className='nrow';
+      const g=document.createElement('button'); g.type='button'; g.className='grip'; g.innerHTML=ICON.grip;
+      g.setAttribute('aria-label',`${m.label} 순서 옮기기 (위아래 화살표)`); g.title='끌어서 순서 바꾸기';
+      g.onpointerdown=e=>navDrag(e,li,path);
+      g.onkeydown=e=>{ if(e.key!=='ArrowUp'&&e.key!=='ArrowDown') return; e.preventDefault();
+        const sib=e.key==='ArrowUp'?li.previousElementSibling:li.nextElementSibling; if(!sib) return;
+        li.parentNode.insertBefore(li,e.key==='ArrowUp'?sib:sib.nextSibling); navSave(li.parentNode,path);
+        const ng=[...$('nav').querySelectorAll('li')].find(x=>x.dataset.id===li.dataset.id); ng&&ng.querySelector(':scope>.nrow>.grip').focus(); };
+      row.append(g,b); li.append(row);
+    } else li.append(b);
+    if(!m.key && !ui.navClosed[[...path,m.label].join('/')]){ const ul=document.createElement('ul'); ul.append(...build(m.children,[...path,m.label])); li.append(ul); }
     return li;
   });
+  $('nav').classList.toggle('ordering',navOrdering);
   $('nav').replaceChildren(...build(MENU,[]));
 }
+// 손잡이를 끌면 같은 묶음 안에서만 위아래로 움직여요(마우스·손가락 모두).
+function navDrag(e,li,path){
+  if(e.button>0) return; e.preventDefault();
+  const ul=li.parentNode, g=e.currentTarget; g.setPointerCapture(e.pointerId); li.classList.add('dragging');
+  let moved=false;
+  const move=ev=>{
+    const y=ev.clientY;
+    const prev=li.previousElementSibling, next=li.nextElementSibling;
+    const mid=el=>{ const r=el.querySelector(':scope>.nrow').getBoundingClientRect(); return r.top+r.height/2; };
+    // 끌고 있는 항목은 그대로 두고 옆 항목을 옮겨요(끌던 항목을 떼었다 붙이면 손가락 추적이 끊겨요).
+    if(prev && y<mid(prev)){ ul.insertBefore(prev,li.nextSibling); moved=true; }
+    else if(next && y>mid(next)){ ul.insertBefore(next,li); moved=true; }
+  };
+  const up=()=>{ g.onpointermove=g.onpointerup=g.onpointercancel=null; li.classList.remove('dragging'); if(moved) navSave(ul,path); };
+  g.onpointermove=move; g.onpointerup=up; g.onpointercancel=up;
+}
+function navSave(ul,path){
+  // 화면에 안 보이는(권한 없는) 항목도 원래 자리 순서를 지키도록, 저장된 순서에 보이는 항목 순서를 덧씌워요.
+  const shown=[...ul.children].map(x=>x.dataset.id);
+  let items=MENU; for(const lab of path){ items=items.find(m=>!m.key&&m.label===lab).children; }
+  const all=navSorted(items,path).map(m=>navId(m,path));
+  let k=0; const merged=all.map(id=>shown.includes(id)?shown[k++]:id);
+  ui.navOrder=Object.assign({},ui.navOrder,{[navParent(path)]:merged});
+  ls.set(LS_UI,ui); renderNav(); window.saveNavOrder && saveNavOrder(ui.navOrder);
+}
+function setOrdering(on){
+  navOrdering=on; $('navorder').textContent=on?'순서 바꾸기 끝':'메뉴 순서 바꾸기';
+  $('navorder').setAttribute('aria-pressed',on); $('navreset').hidden=!on; $('navhint').hidden=!on; renderNav();
+}
+$('navorder').onclick=()=>setOrdering(!navOrdering);
+$('navreset').onclick=()=>{ if(!confirm('메뉴를 처음 순서로 되돌릴까요?')) return; ui.navOrder={}; ls.set(LS_UI,ui); renderNav(); window.saveNavOrder && saveNavOrder({}); };
+// 다른 기기에서 바꾼 순서를 받아와요.
+window.applyNavOrder=o=>{ if(!o||typeof o!=='object') return; if(JSON.stringify(o)===JSON.stringify(ui.navOrder||{})) return; ui.navOrder=o; ls.set(LS_UI,ui); renderNav(); };
 $('menubtn').onclick=()=>$('shell').classList.add('open');
 $('scrim').onclick=()=>$('shell').classList.remove('open');
 
@@ -1263,6 +1331,8 @@ $('bkin').onclick=()=>{
     const n=prompt('사이트에 보일 이름을 적어 주세요.'); if(n==null||!n.trim()) return;
     try{ await myRef.update({name:n.trim().slice(0,20)}); }catch(e){ alert('이름을 바꾸지 못했어요. 새로고침 후 다시 해 주세요.'); }
   };
+  // 메뉴 순서는 내 계정(users/{uid}.navOrder)에 저장해서 다른 기기에서도 같게 보여요.
+  window.saveNavOrder=o=>{ if(myRef) myRef.update({navOrder:o}).catch(()=>{}); };
   $('pwedit').onclick=()=>{ $('pwform').hidden=!$('pwform').hidden; $('pwmsg').hidden=true; };
   $('pwform').onsubmit=async e=>{
     e.preventDefault();
@@ -1296,7 +1366,7 @@ $('bkin').onclick=()=>{
       // 관리자는 언제나 모든 메뉴를 봐요. 사용자 목록에 보이도록 자기 문서도 하나 만들어 둬요.
       enter(u,{admin:true,access:null}); showWho(u,'',true);
       meUnsub=ref.onSnapshot(snap=>{
-        if(snap.exists) showWho(u,snap.data().name,true);
+        if(snap.exists){ showWho(u,snap.data().name,true); applyNavOrder(snap.data().navOrder); }
         else if(!snap.metadata.fromCache) ref.set({id,email,name:signupName,status:'approved',createdAt:joined}).catch(()=>{});
       },()=>{});
       return;
@@ -1308,7 +1378,7 @@ $('bkin').onclick=()=>{
         try{ await ref.set({id,email,name:signupName,status:'pending',createdAt:joined}); }catch(e){ denied(); }
         return;
       }
-      const d=snap.data(); showWho(u,d.name,false);
+      const d=snap.data(); showWho(u,d.name,false); applyNavOrder(d.navOrder);
       if(d.status==='approved') enter(u,{admin:false,access:d.access||{}});
       else if(d.status==='blocked') denied('이 계정은 사용이 막혀 있어요. 홍이 님께 말해 주세요.');
       else { userId=null; entered=false; me={admin:false,access:{}}; noAccess(); $('shell').hidden=true; $('gate').hidden=false; gateShow('wait'); $('waitid').textContent=id; }
