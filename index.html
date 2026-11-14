@@ -231,6 +231,15 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
   .sp-row{grid-template-columns:minmax(0,1fr) auto;row-gap:4px}
   .sp-row>span.sp-hold{text-align:left}
 }
+.sp-finder{display:grid;gap:6px}
+.sp-find{font:inherit;width:100%;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.sp-find:focus{outline:2px solid var(--accent);border-color:transparent}
+.sp-results{display:grid;max-height:300px;overflow:auto}
+.sp-results:empty{display:none}
+.sp-hit{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 10px;text-align:left;padding:8px 10px;border-radius:8px}
+.sp-hit:hover,.sp-hit:focus-visible{background:var(--accent-soft)}
+.sp-hit b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sp-hit span{font-variant-numeric:tabular-nums;color:var(--muted);font-size:.85rem}
+.sp-hit small{grid-column:1/-1;font-size:.75rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sp-form{margin:10px 0}.sp-form select{font:inherit}
 .sp-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .sp-err:empty{display:none}.sp-err{color:var(--danger)}
@@ -773,7 +782,7 @@ body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--l
 <script src="asset.js?v=20261103d"></script>
 <script src="appliance.js?v=20261104d"></script>
 <script src="stocks.js?v=20261103d"></script>
-<script src="stockpf.js?v=20261114a"></script>
+<script src="stockpf.js?v=20261114b"></script>
 <script src="admin.js?v=20261103d"></script>
 <script src="gcal.js?v=20261104a"></script>
 <script>

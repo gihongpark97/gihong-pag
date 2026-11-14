@@ -28,7 +28,7 @@ const quotesRef = home.collection('stocklive').doc('quotes');
 const newsRef = home.collection('stocklive').doc('news');
 
 const keyOf = h => h.market === 'US' ? 'US:' + String(h.code).toUpperCase() : String(h.code).padStart(6, '0');
-const valid = h => h && h.code && (h.market === 'US' ? /^[A-Za-z.\-]{1,10}$/.test(h.code) : /^[0-9A-Z]{6}$/.test(String(h.code).padStart(6, '0')));
+const valid = h => h && h.code && (h.market === 'US' ? /^[A-Za-z0-9.\-]{1,10}$/.test(h.code) : /^[0-9A-Z]{6}$/.test(String(h.code).padStart(6, '0')));
 let holdings = [];
 let last = {}, errors = {}, lastWrite = 0, lastErrWrite = 0, wake = null;
 
