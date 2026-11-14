@@ -114,6 +114,33 @@ function totals(items,cur){
   items.forEach(h=>{ const c=calc(h); if(c.cur!==cur||!c.qty) return; cost+=c.cost; if(c.value==null) known=false; else value+=c.value; day+=c.day||0; });
   return {cost,value,pl:value-cost,plr:cost?(value-cost)/cost*100:0,day,known};
 }
+/* ---------- 원화로 보기: 미국 주식을 지금 환율로 원화로 바꿔 보여요 ---------- */
+const KRW_LS='hong.stock.krw', FX_LS='hong.stock.fx';
+let krw=false, fx=null, fxP=null;   // fx = {rate, at, src}
+try{ krw=localStorage.getItem(KRW_LS)==='1'; fx=JSON.parse(localStorage.getItem(FX_LS))||null; }catch(e){}
+function fxRate(){ const m=Q.data&&Q.data.fx; return (m&&m.rate)||(fx&&fx.rate)||null; }
+function loadFx(force){
+  if(fxP||(!force&&fx&&Date.now()-fx.at<6*3600e3)) return fxP||Promise.resolve(fx);
+  const srcs=[
+    ['https://open.er-api.com/v6/latest/USD',j=>j&&j.rates&&j.rates.KRW,'ExchangeRate-API'],
+    ['https://api.frankfurter.app/latest?from=USD&to=KRW',j=>j&&j.rates&&j.rates.KRW,'유럽중앙은행'],
+  ];
+  fxP=(async()=>{
+    for(const [u,pick,src] of srcs){
+      try{ const r=await fetch(u,{cache:'no-store'}); if(!r.ok) continue; const v=+pick(await r.json());
+        if(v>500&&v<5000){ fx={rate:v,at:Date.now(),src}; try{ localStorage.setItem(FX_LS,JSON.stringify(fx)); }catch(e){} return fx; } }catch(e){}
+    }
+    return fx;
+  })().finally(()=>{ fxP=null; });
+  return fxP;
+}
+// 화면에 보일 통화: 원화로 보기면 미국 주식도 원으로
+const showCur=cur=>krw&&cur==='USD'&&fxRate()?'KRW':cur;
+const conv=(v,cur)=>v==null?null:(krw&&cur==='USD'&&fxRate()?v*fxRate():v);
+const M=(v,cur)=>money(conv(v,cur),showCur(cur));
+const S=(v,cur)=>sgn(conv(v,cur),showCur(cur));
+const toKrw=(v,cur)=>v==null?null:cur==='USD'?(fxRate()?v*fxRate():null):v;
+
 /* ---------- 전체 종목 검색: GitHub Actions가 매일 만드는 종목 목록(stock-master 브랜치) ---------- */
 const MASTER_URL='https://raw.githubusercontent.com/gihongpark97/gihong-pag/stock-master/stocks-master.json';
 let master=null, masterP=null, masterErr=false;
@@ -205,26 +232,125 @@ function row(h){
   return el('button',{type:'button',class:'sp-row'+flash,onclick:()=>{ hEdit=h.id; hDraft={...h}; HD.render(); }},
     el('span',{class:'sp-name'},el('b',{},h.name),el('small',{},h.market==='US'?`${h.code} · ${EXCD[h.excd||'NAS']}`:h.code)),
     el('span',{class:'sp-px '+tone(q&&q.rate)},
-      el('b',{},c.price!=null?money(c.price,c.cur):(err?'오류':'–')),
-      el('small',{},q?`${sgn(q.change,c.cur)} (${pct(q.rate)})`:(err?String(err).slice(0,40):'시세 대기'))),
+      el('b',{},c.price!=null?M(c.price,c.cur):(err?'오류':'–')),
+      el('small',{},q?`${showCur(c.cur)!==c.cur?money(c.price,c.cur)+' · ':''}${S(q.change,c.cur)} (${pct(q.rate)})`:(err?String(err).slice(0,40):'시세 대기'))),
     c.qty?el('span',{class:'sp-hold'},
-      el('small',{},`${c.qty.toLocaleString('ko-KR')}주 · 평단 ${money(c.avg,c.cur)}`),
-      el('b',{},money(c.value,c.cur))):el('span',{class:'sp-hold'},el('small',{},'관심 종목')),
-    c.qty?el('span',{class:'sp-pl '+tone(c.pl)},el('b',{},sgn(c.pl,c.cur)),el('small',{},pct(c.plr))):el('span',{class:'sp-pl'}));
+      el('small',{},`${c.qty.toLocaleString('ko-KR')}주 · 평단 ${M(c.avg,c.cur)}`),
+      el('b',{},c.value!=null?M(c.value,c.cur):'–')):el('span',{class:'sp-hold'},el('small',{},'관심 종목')),
+    c.qty?el('span',{class:'sp-pl '+tone(c.pl)},el('b',{},c.pl!=null?S(c.pl,c.cur):'–'),el('small',{},pct(c.plr))):el('span',{class:'sp-pl'}));
+}
+function tile(label,t,cur,extra){
+  return el('div',{class:'ltile sp-tile'},
+    el('div',{class:'llab'},label),
+    el('div',{class:'sp-big'},t.known?money(t.value,cur):'시세 대기'),
+    el('div',{class:'sp-line'},el('span',{},'평가손익 '),el('b',{class:tone(t.pl)},t.known?`${sgn(t.pl,cur)} (${pct(t.plr)})`:'–')),
+    el('div',{class:'sp-line'},el('span',{},'오늘 '),el('b',{class:tone(t.day)},Q.data&&Q.data.quotes?sgn(t.day,cur):'–')),
+    el('div',{class:'sp-line'},el('span',{},'투자 원금 '),el('b',{},money(t.cost,cur))),extra||null);
+}
+// 원화로 합친 합계(미국 주식은 지금 환율로)
+function totalsKrw(items){
+  let cost=0,value=0,day=0,known=true;
+  items.forEach(h=>{ const c=calc(h); if(!c.qty) return; const k=v=>toKrw(v,c.cur);
+    if(k(c.cost)==null){ known=false; return; } cost+=k(c.cost); if(c.value==null) known=false; else value+=k(c.value); day+=k(c.day||0)||0; });
+  return {cost,value,pl:value-cost,plr:cost?(value-cost)/cost*100:0,day,known};
 }
 function summary(items){
+  const hasKR=items.some(h=>h.market!=='US'&&+h.qty), hasUS=items.some(h=>h.market==='US'&&+h.qty);
+  if(!hasKR&&!hasUS) return null;
+  const rate=fxRate();
+  if(krw&&hasUS&&rate){
+    const tiles=[tile('전체 평가금액 (원화)',totalsKrw(items),'KRW')];
+    if(hasKR) tiles.push(tile('국내 주식',totals(items,'KRW'),'KRW'));
+    const u=totals(items,'USD'), k=v=>v*rate;
+    tiles.push(tile('미국 주식 (원화)',{...u,value:k(u.value),cost:k(u.cost),pl:k(u.pl),day:k(u.day)},'KRW',
+      el('div',{class:'sp-line'},el('span',{},'달러로 '),el('b',{},u.known?money(u.value,'USD'):money(u.cost,'USD')))));
+    return el('div',{class:'ltiles'},...tiles);
+  }
   const tiles=[];
-  ['KRW','USD'].forEach(cur=>{
-    if(!items.some(h=>(h.market==='US'?'USD':'KRW')===cur&&+h.qty)) return;
-    const t=totals(items,cur);
-    tiles.push(el('div',{class:'ltile sp-tile'},
-      el('div',{class:'llab'},cur==='USD'?'미국 주식 평가금액':'국내 주식 평가금액'),
-      el('div',{class:'sp-big'},t.known?money(t.value,cur):'시세 대기'),
-      el('div',{class:'sp-line'},el('span',{},'평가손익 '),el('b',{class:tone(t.pl)},t.known?`${sgn(t.pl,cur)} (${pct(t.plr)})`:'–')),
-      el('div',{class:'sp-line'},el('span',{},'오늘 '),el('b',{class:tone(t.day)},Q.data?sgn(t.day,cur):'–')),
-      el('div',{class:'sp-line'},el('span',{},'투자 원금 '),el('b',{},money(t.cost,cur)))));
-  });
-  return tiles.length?el('div',{class:'ltiles'},...tiles):null;
+  if(hasKR) tiles.push(tile('국내 주식 평가금액',totals(items,'KRW'),'KRW'));
+  if(hasUS) tiles.push(tile('미국 주식 평가금액',totals(items,'USD'),'USD'));
+  return el('div',{class:'ltiles'},...tiles);
+}
+function fxBar(items){
+  if(!items.some(h=>h.market==='US')) return null;
+  const rate=fxRate(), m=Q.data&&Q.data.fx;
+  const cb=el('input',{type:'checkbox',onchange:e=>{ krw=e.target.checked; try{ localStorage.setItem(KRW_LS,krw?'1':'0'); }catch(e){} if(krw&&!rate) loadFx(true).then(renderList); renderList(); }});
+  cb.checked=krw;
+  return el('div',{class:'sp-fx'},
+    el('label',{class:'sp-check'},cb,el('span',{},'미국 주식 원화로 보기')),
+    el('span',{class:'llab'},rate?`환율 1달러 = ${rate.toLocaleString('ko-KR',{maximumFractionDigits:2})}원 · ${m&&m.rate?'한국투자증권':(fx&&fx.src)||''} ${ago((m&&m.at)||(fx&&fx.at))}`:(krw?'환율을 불러오는 중…':'')),
+    krw&&rate?el('span',{class:'llab'},'손익은 지금 환율로 계산해요(산 날 환율 차이는 빼고).'):null);
+}
+
+/* ---------- 그래프 ---------- */
+const PALETTE=['#2f6b4f','#c8372d','#2f5fb3','#d08a1c','#7b4fa8','#1f8a8a','#a8506e','#6b7a2f','#8a6a4f','#55606b'];
+function donut(items){
+  const own=items.filter(h=>+h.qty);
+  if(!own.length) return null;
+  const parts=own.map(h=>{ const c=calc(h); return {h,v:toKrw(c.value!=null?c.value:c.cost,c.cur),byCost:c.value==null}; }).filter(p=>p.v>0);
+  const missing=own.length-parts.length;
+  const sum=parts.reduce((a,p)=>a+p.v,0); if(!sum) return null;
+  parts.sort((a,b)=>b.v-a.v);
+  const R=60, C=2*Math.PI*R; let off=0;
+  const NS='http://www.w3.org/2000/svg', svg=document.createElementNS(NS,'svg');
+  svg.setAttribute('viewBox','0 0 160 160'); svg.setAttribute('class','sp-donut');
+  parts.forEach((p,i)=>{ const c=document.createElementNS(NS,'circle'), len=p.v/sum*C;
+    c.setAttribute('cx',80); c.setAttribute('cy',80); c.setAttribute('r',R); c.setAttribute('fill','none');
+    c.setAttribute('stroke',PALETTE[i%PALETTE.length]); c.setAttribute('stroke-width',26);
+    c.setAttribute('stroke-dasharray',`${Math.max(0,len-1.5)} ${C}`); c.setAttribute('stroke-dashoffset',-off);
+    c.setAttribute('transform','rotate(-90 80 80)'); off+=len; svg.append(c); });
+  const t=document.createElementNS(NS,'text'); t.setAttribute('x',80); t.setAttribute('y',86); t.setAttribute('text-anchor','middle'); t.setAttribute('class','sp-donut-t');
+  t.textContent=`${parts.length}종목`; svg.append(t);
+  const anyCost=parts.some(p=>p.byCost);
+  return el('section',{class:'lcard sp-chart'},
+    el('div',{class:'lbar'},el('h2',{},'종목 비중'),el('span',{class:'llab'},anyCost?'시세 없는 종목은 투자 원금 기준':'평가금액 기준')),
+    el('div',{class:'sp-donutwrap'},svg,
+      el('div',{class:'sp-legend'},...parts.map((p,i)=>el('div',{class:'sp-leg'},
+        el('i',{style:`background:${PALETTE[i%PALETTE.length]}`}),el('span',{},p.h.name),
+        el('b',{},(p.v/sum*100).toFixed(1)+'%'),el('small',{},money(p.v,'KRW')))))),
+    missing?el('p',{class:'lnote'},'미국 주식은 환율을 불러오면 같이 그려져요.'):null);
+}
+function plBars(items){
+  const rows=items.filter(h=>+h.qty).map(h=>({h,c:calc(h)})).filter(x=>x.c.plr!=null);
+  if(!rows.length) return el('section',{class:'lcard sp-chart'},el('div',{class:'lbar'},el('h2',{},'종목별 수익률')),
+    el('p',{class:'lnote'},'시세가 들어오면 종목마다 수익률 막대가 보여요. (맥 서버에 한국투자증권 앱키를 넣으면 시작돼요)'));
+  rows.sort((a,b)=>b.c.plr-a.c.plr);
+  const max=Math.max(...rows.map(x=>Math.abs(x.c.plr)),1);
+  return el('section',{class:'lcard sp-chart'},el('div',{class:'lbar'},el('h2',{},'종목별 수익률')),
+    el('div',{class:'sp-bars'},...rows.map(x=>{ const w=Math.abs(x.c.plr)/max*50;
+      return el('div',{class:'sp-bar'},el('span',{class:'sp-bar-n'},x.h.name),
+        el('span',{class:'sp-bar-track'},el('i',{class:x.c.plr>=0?'pos':'neg',style:x.c.plr>=0?`left:50%;width:${w}%`:`right:50%;width:${w}%`})),
+        el('b',{class:tone(x.c.plr)},pct(x.c.plr))); })));
+}
+// 종목 차트: 국내는 네이버 증권 차트 그림, 미국은 트레이딩뷰 차트. (맥 서버 없이도 보여요)
+let chSel=null, chPer='month3', chCache={key:'',node:null};
+const KR_PER={day:['오늘','area/day'],month3:['3개월','area/month3'],year:['1년','area/year'],year3:['3년','area/year3'],candle:['일봉','candle/day'],week:['주봉','candle/week']};
+const TV_EX={NAS:'NASDAQ',NYS:'NYSE',AMS:'AMEX'}, TV_PER={day:['오늘','5'],month3:['3개월','D'],year:['1년','W'],year3:['3년','M']};
+function priceChart(items){
+  if(!items.length) return null;
+  let h=items.find(x=>x.id===chSel)||items[0]; chSel=h.id;
+  const us=h.market==='US', pers=us?TV_PER:KR_PER; if(!pers[chPer]) chPer='month3';
+  // 시세가 5초마다 들어와도 차트는 다시 불러오지 않게 같은 걸 그대로 써요
+  const key=[items.map(x=>x.id+x.name).join(','),h.id,h.code,h.excd,chPer,chPer==='day'?Math.floor(Date.now()/60000):''].join('|');
+  if(chCache.key===key&&chCache.node) return chCache.node;
+  const pick=el('div',{class:'sp-chips'},...items.map(x=>el('button',{type:'button',class:'chip','aria-pressed':String(x.id===h.id),onclick:()=>{ chSel=x.id; renderList(); }},x.name)));
+  const per=el('div',{class:'sseg'},...Object.entries(pers).map(([k,[l]])=>el('button',{type:'button',class:'chip','aria-pressed':String(chPer===k),onclick:()=>{ chPer=k; renderList(); }},l)));
+  let body;
+  if(us){
+    const dark=matchMedia('(prefers-color-scheme: dark)').matches&&document.documentElement.dataset.theme!=='light'||document.documentElement.dataset.theme==='dark';
+    const sym=`${TV_EX[h.excd||'NAS']||'NASDAQ'}:${h.code}`;
+    const src=`https://s.tradingview.com/widgetembed/?symbol=${encodeURIComponent(sym)}&interval=${TV_PER[chPer][1]}&style=3&theme=${dark?'dark':'light'}&locale=kr&hidesidetoolbar=1&hidetoptoolbar=1&saveimage=0&withdateranges=0&timezone=Asia%2FSeoul`;
+    body=el('iframe',{class:'sp-tv',src,title:`${h.name} 차트`,loading:'lazy'});
+  }else{
+    const img=el('img',{class:'sp-img',alt:`${h.name} ${KR_PER[chPer][0]} 차트`,src:`https://ssl.pstatic.net/imgfinance/chart/item/${KR_PER[chPer][1]}/${h.code}.png?t=${Math.floor(Date.now()/60000)}`});
+    img.onerror=()=>img.replaceWith(el('p',{class:'lnote'},'차트 그림을 불러오지 못했어요. 아래 링크로 보세요.'));
+    body=img;
+  }
+  const link=us?`https://www.tradingview.com/symbols/${TV_EX[h.excd||'NAS']||'NASDAQ'}-${h.code}/`:`https://finance.naver.com/item/main.naver?code=${h.code}`;
+  return chCache.key=key, chCache.node=el('section',{class:'lcard sp-chart'},
+    el('div',{class:'lbar'},el('h2',{},`${h.name} 차트`),el('a',{class:'llab',href:link,target:'_blank',rel:'noopener'},us?'트레이딩뷰에서 크게 보기':'네이버 증권에서 보기')),
+    pick,per,el('div',{class:'sp-chartbox'},body),
+    el('p',{class:'lnote'},us?'미국 차트는 트레이딩뷰 제공(지연될 수 있어요).':'국내 차트는 네이버 증권 그림이에요. 오늘 차트는 1분마다 새로 받아요.'));
 }
 function liveBadge(){
   const d=Q.data, note=liveNote(Q,'시세');
@@ -235,13 +361,15 @@ function liveBadge(){
 function renderList(){
   const R=HD.root; if(!R) return; const box=R.querySelector('#sp-list'); if(!box) return;
   const items=HD.state.items, own=items.filter(h=>+h.qty), watch=items.filter(h=>!+h.qty);
-  const t=totals(items,'KRW');
+  const t=totalsKrw(items);
   const sum=R.querySelector('.sp-sum'); if(sum) sum.textContent=own.length?`보유 ${own.length}종목`+(t.cost&&t.known?` · 평가손익 ${sgn(t.pl,'KRW')} (${pct(t.plr)})`:''):'아직 적은 종목이 없어요';
   const list=(arr,title)=>arr.length?el('section',{class:'lcard sp-card'},
     el('div',{class:'lbar'},el('h2',{},title),el('span',{class:'llab'},`${arr.length}개`)),
     el('div',{class:'sp-head'},el('span',{},'종목'),el('span',{},'현재가'),el('span',{},'평가금액'),el('span',{},'손익')),
     ...arr.map(h=>hEdit===h.id?editor(h):row(h))):null;
-  box.replaceChildren(...[liveBadge(),summary(items),list(own,'보유 종목'),list(watch,'관심 종목'),
+  box.replaceChildren(...[liveBadge(),fxBar(items),summary(items),list(own,'보유 종목'),list(watch,'관심 종목'),
+    items.length?el('div',{class:'sp-charts'},donut(items),plBars(items)):null,
+    priceChart(items),
     !items.length?el('div',{class:'lcard'},el('p',{class:'lnote'},'아래 \'종목 추가\'에서 가진 주식을 적어 주세요. 수량과 평단가를 적으면 현재가로 평가금액과 손익을 계산해 줘요.')):null].filter(Boolean));
 }
 HD.render=()=>{
@@ -355,7 +483,7 @@ JR.render=()=>{
 /* ---------- 메뉴 연결 ---------- */
 window.VIEWS=Object.assign(window.VIEWS||{},{
   stockHoldings:{
-    open(c){ HD.root=c; hEdit=null; prevPx={}; HD.load(); HD.render(); HD.sync(); qOff=Q.on(onQuotes);
+    open(c){ HD.root=c; hEdit=null; prevPx={}; HD.load(); HD.render(); HD.sync(); qOff=Q.on(onQuotes); loadFx().then(()=>{ if(HD.root&&hEdit===null) renderList(); });
       tick=setInterval(()=>{ const b=HD.root&&HD.root.querySelector('.sp-live'); if(b&&Q.data&&!liveNote(Q,'시세')) b.replaceWith(liveBadge()); },1000); },
     close(){ if(HD.unsub){ HD.unsub(); HD.unsub=null; } if(HD.pending) HD.flush(); HD.root=null; clearInterval(tick); qOff&&qOff(); qOff=null; },
     sync(){ if(HD.root){ HD.sync(); Q.restart(); } },
