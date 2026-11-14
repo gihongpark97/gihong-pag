@@ -1251,6 +1251,7 @@ $('bkin').onclick=()=>{
     }
     const label=$('loginbtn').textContent;
     $('loginbtn').disabled=true; $('loginbtn').textContent=signup?'만드는 중…':'로그인 중…';
+    markAct();
     try{
       if(signup) await auth.createUserWithEmailAndPassword(toEmail(id),pw);
       else await auth.signInWithEmailAndPassword(toEmail(id),pw);
@@ -1264,7 +1265,7 @@ $('bkin').onclick=()=>{
   const popupFail=c=>c.includes('popup-blocked')||c.includes('operation-not-supported')||c.includes('web-storage-unsupported');
   let googleTry=false;
   $('googlebtn').onclick=async()=>{
-    showErr(''); googleTry=true; const b=$('googlebtn'); b.disabled=true;
+    showErr(''); googleTry=true; const b=$('googlebtn'); b.disabled=true; markAct();
     try{ await auth.signInWithPopup(gprov()); }
     catch(err){ const c=err&&err.code||''; if(popupFail(c)){ try{ await auth.signInWithRedirect(gprov()); return; }catch(e2){ showErr(errMsg(e2&&e2.code||'')); } } else showErr(errMsg(c)); }
     b.disabled=false; googleTry=false;
@@ -1304,6 +1305,19 @@ $('bkin').onclick=()=>{
       $('pwcur').value=''; $('pwnew').value=''; say('비밀번호를 바꿨어요.',true);
     }catch(err){ const c=err&&err.code||''; say(c.includes('wrong-password')||c.includes('invalid-credential')||c.includes('invalid-login')?'지금 비밀번호가 맞지 않아요.':errMsg(c)); }
   };
+  // 30분 동안 아무것도 안 하면 자동으로 로그아웃해요. 마지막 활동 시각은 탭끼리 같이 써요(localStorage).
+  const IDLE_MS=30*60*1000, LS_ACT='hong.active';
+  const lastAct=()=>{ try{ return +localStorage.getItem(LS_ACT)||0; }catch(e){ return 0; } };
+  const markAct=()=>{ try{ localStorage.setItem(LS_ACT,String(Date.now())); }catch(e){} };
+  const idleOut=()=>{ const t=lastAct(); return !!t && Date.now()-t>IDLE_MS; };
+  const timeoutLogout=()=>auth.signOut().then(()=>showErr('30분 동안 사용하지 않아서 로그아웃됐어요. 다시 로그인해 주세요.'));
+  let actAt=0;
+  const onAct=()=>{ if(!auth.currentUser) return; const n=Date.now(); if(n-actAt<15000) return; if(idleOut()) return timeoutLogout(); actAt=n; markAct(); };
+  ['pointerdown','keydown','touchstart','wheel'].forEach(ev=>addEventListener(ev,onAct,{passive:true,capture:true}));
+  addEventListener('scroll',onAct,{passive:true,capture:true});
+  const idleCheck=()=>{ if(auth.currentUser && idleOut()) timeoutLogout(); };
+  setInterval(idleCheck,30000);
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden) idleCheck(); });
   const enter=(u,m)=>{
     me=m; userId=u.uid;
     $('shell').hidden=false; $('gate').hidden=true; btn.hidden=false;
@@ -1318,6 +1332,8 @@ $('bkin').onclick=()=>{
       $('shell').hidden=true; $('gate').hidden=false; btn.hidden=true; gateShow('login');
       tree=[]; render(); watch(); setTimeout(()=>$('loginid').focus(),0); return;
     }
+    if(idleOut()){ timeoutLogout(); return; }  // 창을 닫았다가 30분 넘게 지나서 다시 연 경우
+    markAct(); actAt=Date.now();
     const email=(u.email||'').toLowerCase(), id=email.split('@')[0];
     if(!signupName && u.displayName) signupName=u.displayName.slice(0,20);  // 구글로 처음 들어온 사람은 구글 이름을 써요
     const ref=myRef=fs.collection('users').doc(u.uid);
