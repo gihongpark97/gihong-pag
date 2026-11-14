@@ -1,0 +1,23 @@
+name: 전체 종목 목록 만들기
+on:
+  schedule:
+    - cron: '0 22 * * *'   # 매일 한국 시간 07:00
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: stock-master
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 종목 목록 받기
+        run: python3 scripts/stock_master.py
+      - name: stock-master 브랜치에 올리기
+        run: |
+          mkdir out && mv stocks-master.json out/ && cd out
+          git init -q -b stock-master
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add stocks-master.json && git commit -qm "종목 목록 갱신 $(date -u +%FT%TZ)"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" stock-master

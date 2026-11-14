@@ -114,18 +114,63 @@ function totals(items,cur){
   items.forEach(h=>{ const c=calc(h); if(c.cur!==cur||!c.qty) return; cost+=c.cost; if(c.value==null) known=false; else value+=c.value; day+=c.day||0; });
   return {cost,value,pl:value-cost,plr:cost?(value-cost)/cost*100:0,day,known};
 }
+/* ---------- 전체 종목 검색: GitHub Actions가 매일 만드는 종목 목록(stock-master 브랜치) ---------- */
+const MASTER_URL='https://raw.githubusercontent.com/gihongpark97/gihong-pag/stock-master/stocks-master.json';
+let master=null, masterP=null, masterErr=false;
+const norm=t=>String(t||'').toLowerCase().replace(/[\s·.,()\-]/g,'');
+function loadMaster(){
+  if(master||masterP) return masterP||Promise.resolve(master);
+  const d=new Date(), v=`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+  masterP=fetch(MASTER_URL+'?v='+v).then(r=>{ if(!r.ok) throw new Error(r.status); return r.json(); }).then(j=>{
+    const rows=[];
+    (j.kr||[]).forEach(([code,name,m])=>rows.push({market:'KR',code,name,sub:(m==='Q'?'코스닥':'코스피'),k:[norm(name),code.toLowerCase()]}));
+    (j.us||[]).forEach(([code,ko,en,excd])=>rows.push({market:'US',code,excd,name:ko||en||code,sub:`${EXCD[excd]||excd} · ${en||''}`,k:[norm(ko),norm(en),code.toLowerCase()]}));
+    master=rows; masterErr=false; return rows;
+  }).catch(()=>{ masterErr=true; masterP=null; return null; });
+  return masterP;
+}
+function searchMaster(q){
+  q=norm(q); if(!q||!master) return [];
+  const hit=[];
+  for(const r of master){
+    let best=9;
+    r.k.forEach((k,i)=>{ if(!k) return; const code=i===r.k.length-1;
+      if(k===q) best=Math.min(best,0); else if(k.startsWith(q)) best=Math.min(best,code?1:2); else if(!code&&k.includes(q)) best=Math.min(best,4); });
+    if(best<9) hit.push([best+(r.market==='US'?0.5:0)+r.name.length/1000,r]);
+  }
+  return hit.sort((a,b)=>a[0]-b[0]).slice(0,30).map(x=>x[1]);
+}
+function finder(d){
+  const box=el('div',{class:'sp-results'});
+  const input=el('input',{type:'text',class:'sp-find',placeholder:'종목 이름·코드·티커로 검색 (예: 삼성전자, 하이닉스, 엔비디아, TSLA)',autocomplete:'off',enterkeyhint:'search'});
+  let found=[];
+  const pick=r=>{ d.market=r.market; d.code=r.code; d.name=r.name; if(r.excd) d.excd=r.excd; HD.render();
+    setTimeout(()=>{ const i=HD.root&&HD.root.querySelector('.sp-form input[data-k="qty"]'); i&&i.focus(); },0); };
+  const show=()=>{
+    const q=input.value.trim();
+    if(!q){ box.replaceChildren(); return; }
+    if(!master){ box.replaceChildren(el('p',{class:'lnote'},masterErr?'종목 목록을 못 불러왔어요. 아래 칸에 직접 적어 주세요.':'종목 목록을 불러오는 중…')); return; }
+    found=searchMaster(q);
+    box.replaceChildren(...(found.length?found.map(r=>el('button',{type:'button',class:'sp-hit',onclick:()=>pick(r)},
+      el('b',{},r.name),el('span',{},r.code),el('small',{},r.sub))):[el('p',{class:'lnote'},'찾는 종목이 없어요.')]));
+  };
+  input.oninput=()=>{ if(!master) loadMaster().then(show); show(); };
+  input.onfocus=()=>loadMaster().then(()=>input.value&&show());
+  input.onkeydown=e=>{ if(e.key==='Enter'&&!e.isComposing){ e.preventDefault(); e.stopPropagation(); if(found[0]) pick(found[0]); } };
+  return el('div',{class:'sp-finder'},input,box);
+}
 function editor(h){
   const d=hDraft;
   const set=(k,v)=>{ d[k]=v; };
   const market=el('select',{onchange:e=>{ set('market',e.target.value); HD.render(); }},el('option',{value:'KR'},'국내'),el('option',{value:'US'},'미국'));
   market.value=d.market;
   const excd=el('select',{onchange:e=>set('excd',e.target.value)},...Object.entries(EXCD).map(([k,v])=>el('option',{value:k},v))); excd.value=d.excd||'NAS';
-  const inp=(k,ph,mode)=>el('input',{type:'text',value:d[k]==null||d[k]===0&&k!=='qty'?'':String(d[k]),placeholder:ph,inputmode:mode||null,autocomplete:'off',oninput:e=>set(k,e.target.value)});
+  const inp=(k,ph,mode)=>el('input',{type:'text',value:d[k]==null||d[k]===0&&k!=='qty'?'':String(d[k]),placeholder:ph,inputmode:mode||null,autocomplete:'off','data-k':k,oninput:e=>set(k,e.target.value)});
   const save=()=>{
     const code=String(d.code||'').trim().toUpperCase().replace(/\s/g,'');
     const msg=root=>{ const m=HD.root.querySelector('.sp-err'); if(m) m.textContent=root; };
     if(d.market==='KR'&&!/^[0-9A-Z]{6}$/.test(code)) return msg('국내 종목코드는 6자리예요 (예: 삼성전자 005930).');
-    if(d.market==='US'&&!/^[A-Z.\-]{1,10}$/.test(code)) return msg('미국 티커를 적어 주세요 (예: AAPL).');
+    if(d.market==='US'&&!/^[A-Z0-9.\-]{1,10}$/.test(code)) return msg('미국 티커를 적어 주세요 (예: AAPL).');
     if(!String(d.name||'').trim()) return msg('종목 이름을 적어 주세요.');
     const item={id:h?h.id:nid(),market:d.market,code,name:String(d.name).trim(),qty:num(d.qty),avg:num(d.avg)};
     if(d.market==='US') item.excd=d.excd||'NAS';
@@ -136,6 +181,7 @@ function editor(h){
   const f=(label,input,cls)=>el('label',{class:'lfield'+(cls?' '+cls:'')},el('span',{class:'llab'},label),el('span',{class:'lin'},input));
   const card=el('div',{class:'lcard sp-form',onkeydown:onKey},
     el('div',{class:'lbar'},el('h2',{},h?`${h.name} 고치기`:'종목 추가')),
+    finder(d),
     el('div',{class:'lgrid'},
       f('시장',market),
       d.market==='US'?f('거래소',excd):null,
@@ -148,7 +194,7 @@ function editor(h){
       el('button',{class:'btn',type:'button',onclick:save},h?'저장':'추가'),
       el('button',{class:'chip',type:'button',onclick:()=>{ hEdit=null; hDraft=null; HD.render(); }},'취소'),
       h?el('button',{class:'chip del',type:'button',onclick:()=>{ if(confirm(`'${h.name}'을(를) 목록에서 지울까요?`)){ HD.state.items=HD.state.items.filter(x=>x!==h); hEdit=null; HD.save(); HD.render(); } }},'삭제'):null),
-    el('p',{class:'lnote'},'종목코드는 네이버 증권이나 증권 앱에서 종목을 검색하면 이름 옆에 있어요. 미국 주식은 티커와 거래소(나스닥·뉴욕)를 골라 주세요.'));
+    el('p',{class:'lnote'},'위 검색칸에 이름 일부만 적어도 국내·미국 전체 종목에서 찾아 줘요. 고르면 시장·코드·이름이 채워지니 수량과 평단가만 적으면 돼요.'));
   return card;
 }
 function row(h){
@@ -201,9 +247,9 @@ function renderList(){
 HD.render=()=>{
   const R=HD.root; if(!R) return;
   R.replaceChildren(
-    header(HD,'보유 종목','',el('button',{class:'chip',type:'button',onclick:()=>{ hEdit='new'; hDraft={market:'KR',excd:'NAS',code:'',name:'',qty:'',avg:''}; HD.render(); setTimeout(()=>{ const i=R.querySelector('.sp-form input'); i&&i.focus(); },0); }},'+ 종목 추가')),
+    header(HD,'보유 종목','',el('button',{class:'chip',type:'button',onclick:()=>{ hEdit='new'; hDraft={market:'KR',excd:'NAS',code:'',name:'',qty:'',avg:''}; HD.render(); setTimeout(()=>{ const i=R.querySelector('.sp-find'); i&&i.focus(); },0); }},'+ 종목 추가')),
     el('div',{id:'sp-list'}),
-    hEdit==='new'?editor(null):el('button',{class:'chip sp-add',type:'button',onclick:()=>{ hEdit='new'; hDraft={market:'KR',excd:'NAS',code:'',name:'',qty:'',avg:''}; HD.render(); setTimeout(()=>{ const i=R.querySelector('.sp-form input'); i&&i.focus(); },0); }},'+ 종목 추가'),
+    hEdit==='new'?editor(null):el('button',{class:'chip sp-add',type:'button',onclick:()=>{ hEdit='new'; hDraft={market:'KR',excd:'NAS',code:'',name:'',qty:'',avg:''}; HD.render(); setTimeout(()=>{ const i=R.querySelector('.sp-find'); i&&i.focus(); },0); }},'+ 종목 추가'),
     el('p',{class:'lnote'},'시세는 맥 서버가 한국투자증권에서 장중 5초마다 받아 와요. 종목을 누르면 고치거나 지울 수 있어요. 빨강은 오름, 파랑은 내림이에요.'));
   renderList();
   HD.status(...HD.msg);
