@@ -89,6 +89,7 @@ async function rss(q, lang) {
 let lastNews = 0, newsBusy = false;
 async function newsOnce() {
   if (newsBusy) return; newsBusy = true;
+  const started = Date.now(), list0 = uniq(holdings).map(keyOf).join(',');
   try {
     const items = {};
     for (const h of uniq(holdings)) {
@@ -100,19 +101,23 @@ async function newsOnce() {
       await new Promise(r => setTimeout(r, 400));
     }
     await newsRef.set({ items, at: Date.now() });
-    lastNews = Date.now();
+    // 도는 동안 보유 종목이 바뀌었으면 바로 다시 모으도록 시각을 남기지 않아요
+    lastNews = uniq(holdings).map(keyOf).join(',') === list0 ? started : 0;
     log('📰 뉴스 갱신:', Object.keys(items).length, '종목');
   } finally { newsBusy = false; }
 }
 
+let firstHoldings; const holdingsReady = new Promise(r => { firstHoldings = r; });
 holdingsRef.onSnapshot(snap => {
   const d = snap.exists ? snap.data() : {};
   const before = uniq(holdings).map(keyOf).sort().join(',');
   holdings = Array.isArray(d.items) ? d.items : [];
   const after = uniq(holdings).map(keyOf).sort().join(',');
   if (before !== after) { log('보유 종목:', after || '(없음)'); lastNews = 0; wake && wake(); }
+  firstHoldings();
 }, e => { log('❌ 보유 종목 지켜보기 실패:', e.message); process.exit(1); });
 
+await holdingsReady;   // 보유 종목을 먼저 받아 와야 첫 시세·뉴스가 비지 않아요
 log(`주식 시세 서비스 시작: 장중 ${FAST / 1000}초, 마감 뒤 ${SLOW / 1000}초 간격`);
 let first = true;
 for (;;) {
