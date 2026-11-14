@@ -3,7 +3,7 @@
 > **사이트 → 구글 캘린더 추가**: 사이트 달력에서 색깔(캘린더)을 고르고 추가하면, `gcal-push.js`(늘 켜져 있음)가 몇 초 안에 구글 캘린더에 일정을 만들어요. 이 기능을 처음 켤 때는 일정 쓰기 권한이 필요해서 `npm run auth` 를 한 번 다시 하고 `./install.sh` 를 다시 실행해요. Firebase 규칙도 새로 게시해야 해요(`pbcopy < ~/gihong-pag/firestore.rules`).
 
 맥을 늘 켜 두고, 홈페이지에 필요한 작업을 대신 돌리는 곳이에요.
-지금은 **구글 캘린더 → 체크리스트 달력** 동기화 하나가 있어요. 5분마다 구글 캘린더를 읽어서 Firestore(`shared/home/gcal/*`)에 넣고, 사이트는 그걸 보여 줘요.
+지금은 **구글 캘린더 → 체크리스트 달력** 동기화와 **주식 시세 서비스**(맨 아래)가 있어요. 5분마다 구글 캘린더를 읽어서 Firestore(`shared/home/gcal/*`)에 넣고, 사이트는 그걸 보여 줘요.
 이제 사이트에서 '구글 연결'을 다시 누르지 않아도 일정이 계속 맞춰져요.
 
 비밀 파일 3개는 저장소가 아니라 맥의 `~/.gihong-server/` 에만 둬요. (저장소가 공개라서요)
@@ -121,3 +121,69 @@ GitHub Pages 대신 이 맥이 gihong-pag.com 을 직접 보여 줘요. 맥의 C
 | 웹서버 기록 | `tail -f ~/.gihong-server/logs/site.log` |
 | 사이트 끄기 | `./site-install.sh --uninstall` |
 | 터널 끄기 | `cloudflared service uninstall` |
+
+---
+
+# 주식 시세 서비스 (한국투자증권)
+
+사이트 **기홍프로젝트 › 주식 › 보유 종목**에 적은 종목의 현재가를 `stock-live.js`가 장중 5초마다 한국투자증권 Open API로 받아 Firestore(`shared/home/stocklive/quotes`)에 넣어요. 보유 종목 뉴스도 15분마다 구글 뉴스에서 모아 `shared/home/stocklive/news`에 넣어요. 사이트는 읽기만 하고, **앱키는 이 맥의 `~/.gihong-server/kis.json`에만 있어요.**
+
+- 국내 장(평일 07:50~20:10)·미국 장(프리·애프터 포함, 한국 시간 대략 17:00~다음 날 10:00)이 열려 있을 때만 5초 간격, 닫혀 있으면 1분 간격이에요.
+- 값이 바뀌었을 때만 써서 Firestore 무료 한도(하루 쓰기 2만 건) 안에 들어가요.
+- 계좌 잔고를 읽지 않고 **시세만** 받아요. 그래서 계좌 비밀번호나 매매 권한은 필요 없어요.
+
+## 1. 한국투자증권 계좌 만들기
+
+1. 휴대폰에 **한국투자증권** 앱(한국투자)을 깔고 **비대면 계좌 개설**을 해요. 신분증과 본인 명의 은행 계좌가 있으면 10~20분이면 돼요. 종합매매 계좌면 충분해요. (영업일 기준 20일 안에 다른 증권 계좌를 만들었다면 개설이 막힐 수 있어요.)
+2. 앱에서 **ID 등록**을 하고, 홈페이지 로그인에 쓸 **공동인증서(또는 간편인증)**를 등록해 둬요.
+
+## 2. Open API 신청하고 앱키 받기
+
+1. PC로 [KIS Developers](https://apiportal.koreainvestment.com) 접속 → 위에서 만든 한국투자 ID로 로그인
+2. **API 신청**(또는 한국투자증권 홈페이지 › 트레이딩 › Open API › KIS Developers › 서비스 신청)
+   - 계좌: 방금 만든 종합계좌 선택
+   - 구분: **실전투자**
+   - 약관 동의 → 신청
+3. 신청이 끝나면 **App Key**와 **App Secret**이 보여요. (KIS Developers › 마이페이지 › 내 앱에서 다시 볼 수 있어요.) 앱키는 1년마다 다시 신청해서 연장해야 해요.
+
+## 3. 맥에 앱키 넣기
+
+맥 터미널에서 (따옴표 안에 받은 값을 붙여 넣어요):
+
+```bash
+mkdir -p ~/.gihong-server && chmod 700 ~/.gihong-server
+cat > ~/.gihong-server/kis.json <<'JSON'
+{ "appKey": "여기에 App Key", "appSecret": "여기에 App Secret" }
+JSON
+chmod 600 ~/.gihong-server/kis.json
+```
+
+앱키는 비밀번호와 같아요. 저장소, 메신저, 사이트 어디에도 올리지 마세요.
+`firebase-service-account.json`은 구글 캘린더 동기화 때 넣어 둔 것을 같이 써요(위 4단계).
+
+## 4. 확인하고 켜기
+
+```bash
+cd ~/gihong-pag && git pull && cd mac-server
+npm run stock-check       # 토큰을 받고 삼성전자 현재가를 한 번 보여 줘요
+./stock-install.sh        # 늘 켜 두도록 등록해요
+```
+
+그다음 [Firebase 콘솔 › Firestore › 규칙](https://console.firebase.google.com/project/gihong-pag/firestore/rules)에 새 규칙을 붙여 넣고 **게시**해요. (`pbcopy < ~/gihong-pag/firestore.rules`) 이걸 안 하면 사이트가 시세를 못 읽어요.
+
+사이트 **보유 종목** 위에 초록 점과 "실시간 · 방금 확인"이 보이면 성공이에요.
+
+| 하고 싶은 것 | 명령 |
+|---|---|
+| 기록 보기 | `tail -f ~/.gihong-server/logs/stock-live.log` |
+| 코드 업데이트 반영 | `cd ~/gihong-pag && git pull && cd mac-server && ./stock-install.sh` |
+| 간격 바꾸기(예: 10초) | `STOCK_INTERVAL=10 ./stock-install.sh` |
+| 끄기 | `./stock-install.sh --uninstall` |
+
+## 이럴 땐
+
+- **`토큰 받기 실패`** → `kis.json`의 앱키·시크릿을 다시 복사해요(앞뒤 공백 주의). 실전투자로 신청했는지도 확인해요.
+- **`1분에 한 번만`** → 토큰은 1분에 한 번만 받을 수 있어요. 1분 뒤 다시 해요. 받은 토큰은 `kis-token.json`에 저장돼 하루 동안 다시 써요.
+- **종목 하나만 `오류`** → 종목코드(6자리)나 미국 티커·거래소가 맞는지 확인해요.
+- 미국 주식 시세는 한국투자증권 계정의 해외 시세 신청 상태에 따라 지연 시세일 수 있어요.
+- 넥스트레이드(08:00~20:00) 시간 시세가 아니라 **한국거래소 시세**를 받아요. 통합 시세를 원하면 `KIS_KR_MARKET=UN ./stock-install.sh` 로 바꿔 볼 수 있어요.

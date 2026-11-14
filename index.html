@@ -203,6 +203,57 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .slang{font-size:.7rem;font-weight:700;color:var(--blue);background:var(--blue-soft);border-radius:4px;padding:1px 5px;margin-right:6px;vertical-align:2px}
 .sko{font-size:.88rem;color:var(--muted);line-height:1.45}
 .slinks{display:grid;gap:4px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:.85rem;color:var(--muted)}
+/* 주식 › 보유 종목 / 뉴스 / 일지 (빨강 오름, 파랑 내림) */
+:root{--up:#c8372d;--down:#2f5fb3}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--up:#ff7b6e;--down:#7fa8ef}}
+:root[data-theme="dark"]{--up:#ff7b6e;--down:#7fa8ef}
+.up{color:var(--up)!important}.down{color:var(--down)!important}
+.sp-live{display:inline-flex;align-items:center;gap:8px;font-size:.82rem;color:var(--muted);margin-bottom:12px}
+.sp-live i{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);animation:sp-pulse 2s infinite}
+.sp-live.off{color:var(--danger)}.sp-live.off i{background:var(--danger);box-shadow:none;animation:none}
+@keyframes sp-pulse{50%{opacity:.35}}
+.sp-tile{display:grid;gap:4px}.sp-big{font-size:1.5rem;font-weight:600;font-variant-numeric:tabular-nums}
+.sp-line{display:flex;justify-content:space-between;gap:8px;font-size:.88rem;color:var(--muted)}.sp-line b{color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums}
+.sp-card{gap:0}.sp-card .lbar{margin-bottom:8px}
+.sp-head,.sp-row{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1.2fr) minmax(0,1fr);gap:10px;align-items:center}
+.sp-head{font-size:.75rem;color:var(--muted);padding:0 8px 6px;border-bottom:1px solid var(--line)}.sp-head span:not(:first-child){text-align:right}
+.sp-row{width:100%;text-align:left;padding:10px 8px;border-bottom:1px solid var(--line);border-radius:0;transition:background .6s}
+.sp-row:last-child{border-bottom:0}.sp-row:hover{background:var(--accent-soft)}
+.sp-row>span{display:grid;gap:1px;min-width:0}.sp-row>span:not(:first-child){text-align:right}
+.sp-row b{font-weight:600;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-row small{font-size:.76rem;color:var(--muted);font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-px.up small,.sp-px.down small,.sp-pl.up small,.sp-pl.down small{color:inherit}
+.flash-up{animation:sp-fu 1.2s}.flash-down{animation:sp-fd 1.2s}
+@keyframes sp-fu{0%{background:color-mix(in srgb,var(--up) 22%,transparent)}}
+@keyframes sp-fd{0%{background:color-mix(in srgb,var(--down) 22%,transparent)}}
+@media (max-width:560px){
+  .sp-head{display:none}
+  .sp-row{grid-template-columns:minmax(0,1fr) auto;row-gap:4px}
+  .sp-row>span.sp-hold{text-align:left}
+}
+.sp-form{margin:10px 0}.sp-form select{font:inherit}
+.sp-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sp-err:empty{display:none}.sp-err{color:var(--danger)}
+.sp-add{margin-bottom:14px}
+.sp-chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.sp-chips .chip{display:inline-flex;align-items:center;gap:2px}.sp-chiprate{font-size:.75rem;font-variant-numeric:tabular-nums}
+.sj-cols{display:grid;grid-template-columns:minmax(240px,320px) 1fr;gap:14px;align-items:start}
+@media (max-width:860px){.sj-cols{grid-template-columns:1fr}.sj-right{order:-1}}
+.sj-left,.sj-right{margin:0}
+.sj-left input,.sj-title,.sj-dateinp{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
+.sj-dateinp{width:auto}
+.sj-title{font-size:1.1rem;font-weight:600;background:transparent}
+.sj-list{display:grid;gap:2px;max-height:60vh;overflow:auto}
+.sj-month{margin:8px 0 2px}
+.sj-item{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;text-align:left;padding:8px;border-radius:8px}
+.sj-item:hover{background:var(--accent-soft)}.sj-item.on{background:var(--accent-soft);color:var(--accent)}
+.sj-date{font-size:.8rem;color:var(--muted);font-variant-numeric:tabular-nums;padding-top:2px}
+.sj-t{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sj-item small{grid-column:2;font-size:.75rem;color:var(--muted)}
+.sj-top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.sj-body{font:inherit;line-height:1.7;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 14px;width:100%;min-height:260px;resize:vertical}
+.sj-body:focus,.sj-title:focus,.sj-left input:focus{outline:2px solid var(--accent);border-color:transparent}
+.sj-tips{display:grid;gap:4px;font-size:.88rem;color:var(--muted)}.sj-tips b{color:var(--fg)}
 .slinks a{color:var(--accent)}
 /* 임장 체크리스트: 위쪽 집 칩으로 집을 고르고, 섹션별 접이식 체크 카드를 엄지로 탭하는 모바일 우선 */
 .im{max-width:720px}
@@ -722,6 +773,7 @@ body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--l
 <script src="asset.js?v=20261103d"></script>
 <script src="appliance.js?v=20261104d"></script>
 <script src="stocks.js?v=20261103d"></script>
+<script src="stockpf.js?v=20261114a"></script>
 <script src="admin.js?v=20261103d"></script>
 <script src="gcal.js?v=20261104a"></script>
 <script>
@@ -767,7 +819,12 @@ const MENU=[
     {key:'wedding-dday', label:'전날 준비물', title:'결혼식 전날 준비물', seed:'dday'},  // 트리에는 없지만 데이터가 있어 남겨 뒀어요
   ]},
   {label:'기홍프로젝트', children:[
-    {key:'stocks', label:'주식', title:'관심 뉴스', view:'stocks'},
+    {label:'주식', children:[
+      {key:'stock-holdings', label:'보유 종목', title:'보유 종목', view:'stockHoldings'},
+      {key:'stock-news', label:'보유 종목 뉴스', title:'보유 종목 뉴스', view:'stockNews'},
+      {key:'stock-journal', label:'주식일지', title:'주식일지', view:'stockJournal'},
+      {key:'stocks', label:'관심 뉴스', title:'관심 뉴스', view:'stocks'},
+    ]},
   ]},
   {label:'사용자 관리', key:'admin', view:'admin', adminOnly:true},  // 관리자에게만 보여요
 ];

@@ -53,7 +53,12 @@ service cloud.firestore {
       allow read: if isAdmin() || (signedIn() && resource.data.by == request.auth.uid);
       allow delete: if isAdmin() || (signedIn() && resource.data.by == request.auth.uid);
     }
-    // 대출계산기(loan), 결혼 비용(wedding-cost), 자산관리(asset-status, asset-ledger, asset-goals), 신혼 가전(appliances)
+    // 주식 시세·뉴스: 맥 서버(stock-live.js)가 한국투자증권 API와 구글 뉴스에서 받아 넣어요. 사이트는 읽기만 해요.
+    match /shared/home/stocklive/{doc} {
+      allow read: if can('stock-holdings') || can('stock-news');
+      allow write: if isAdmin();
+    }
+    // 대출계산기(loan), 결혼 비용(wedding-cost), 자산관리(asset-status, asset-ledger, asset-goals), 신혼 가전(appliances), 주식 보유 종목(stock-holdings)·주식일지(stock-journal)
     match /shared/home/pages/{page} {
       allow read, write: if can(page);
     }
