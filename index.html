@@ -325,6 +325,9 @@ ul.tree ul{list-style:none;margin:0;padding-left:22px;border-left:1px solid var(
 .ucheck input{width:18px;height:18px;accent-color:var(--accent)}
 .ubtns{display:flex;gap:8px;flex-wrap:wrap}
 .usec{font-size:1rem;margin:20px 0 10px;color:var(--muted)}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px 16px;font:inherit;font-weight:600;cursor:pointer}
+.gbtn:hover{border-color:var(--muted)}.gbtn:disabled{opacity:.6;cursor:default}
+.gor{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.8rem}.gor::before,.gor::after{content:"";flex:1;border-top:1px solid var(--line)}
 .gate .linkbtn{background:none;border:0;color:var(--muted);font:inherit;font-size:.9rem;cursor:pointer;text-decoration:underline;padding:4px}
 .wrap.wide{max-width:980px}
 .lhead{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:16px}
@@ -626,7 +629,7 @@ body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--l
   <div class="backup" id="acctbox" hidden>
     <div class="llab">내 계정</div>
     <div class="who" id="who"></div>
-    <div class="lbtns"><button class="chip" id="nameedit" type="button">이름 바꾸기</button><button class="chip" id="pwedit" type="button">비밀번호 바꾸기</button><button class="chip" type="button" onclick="logout()">로그아웃</button></div>
+    <div class="lbtns"><button class="chip" id="nameedit" type="button">이름 바꾸기</button><button class="chip" id="pwedit" type="button">비밀번호 바꾸기</button><button class="chip" id="glink" type="button" hidden>구글 계정 연결</button><button class="chip" type="button" onclick="logout()">로그아웃</button></div>
     <form class="pwform" id="pwform" hidden>
       <input type="password" id="pwcur" placeholder="지금 비밀번호" autocomplete="current-password" required>
       <input type="password" id="pwnew" placeholder="새 비밀번호 (6자 이상)" autocomplete="new-password" required>
@@ -687,6 +690,8 @@ body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--l
   <form class="card" id="loginform">
     <h1>기홍이 홈페이지</h1>
     <p>계정이 있는 사람만 들어올 수 있어요.</p>
+    <button class="gbtn" type="button" id="googlebtn"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.1C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.8c4.3-4 6.9-9.9 6.9-17.2z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-3-.8-4.6s.3-3.2.8-4.6l-7.9-6.1C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.8c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.1-13.4-9.9l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg><span>구글로 로그인</span></button>
+    <div class="gor">또는 아이디로</div>
     <input type="text" id="signname" placeholder="이름 (예: 박기홍)" autocomplete="name" hidden>
     <input type="text" id="loginid" placeholder="아이디" autocomplete="username" autocapitalize="off" spellcheck="false" required>
     <input type="password" id="loginpw" placeholder="비밀번호" autocomplete="current-password" required>
@@ -695,7 +700,7 @@ body.asset-theme{--bg:#faf6ee;--surface:#fffdf8;--fg:#3b2f25;--muted:#8a7a68;--l
     <button class="btn" type="submit" id="loginbtn">로그인</button>
     <button class="linkbtn" type="button" id="modebtn">처음이세요? 계정 만들기</button>
     <button class="linkbtn" type="button" id="forgotbtn">비밀번호를 잊었어요</button>
-    <p class="forgot" id="forgot" hidden>관리자(기홍)에게 말해 주세요. 관리자가 Firebase에서 그 계정을 지워 주면, <b>같은 아이디로 다시 가입</b>하면 돼요. 승인되면 예전에 보던 메뉴와 데이터를 그대로 쓸 수 있어요.</p>
+    <p class="forgot" id="forgot" hidden>구글 계정을 연결해 뒀다면 위의 <b>구글로 로그인</b>으로 바로 들어올 수 있어요. 아니라면 관리자(기홍)에게 말해 주세요. 관리자가 Firebase에서 그 계정을 지워 주면, <b>같은 아이디로 다시 가입</b>하면 돼요. 승인되면 예전에 보던 메뉴와 데이터를 그대로 쓸 수 있어요.</p>
   </form>
   <div class="card" id="waitcard" hidden>
     <h1>승인을 기다리고 있어요</h1>
@@ -1222,12 +1227,16 @@ $('bkin').onclick=()=>{
   $('modebtn').onclick=()=>setMode(!signup);
   $('forgotbtn').onclick=()=>{ $('forgot').hidden=!$('forgot').hidden; };
   let signupName='';
-  const errMsg=c=>c.includes('too-many-requests') ? '여러 번 시도해서 잠시 막혔어요. 조금 뒤에 다시 해 주세요.'
+  const errMsg=c=>c.includes('popup-closed-by-user')||c.includes('cancelled-popup-request')||c.includes('user-cancelled') ? ''
+    : c.includes('unauthorized-domain') ? '이 주소는 아직 구글 로그인이 허용되지 않았어요. Firebase 승인 도메인에 추가해 주세요.'
+    : c.includes('credential-already-in-use')||c.includes('account-exists-with-different-credential') ? '이 구글 계정은 이미 다른 계정으로 쓰이고 있어요. 관리자에게 말해 주세요.'
+    : c.includes('provider-already-linked') ? '이미 구글 계정이 연결돼 있어요.'
+    : c.includes('too-many-requests') ? '여러 번 시도해서 잠시 막혔어요. 조금 뒤에 다시 해 주세요.'
     : c.includes('network') ? '인터넷 연결을 확인해 주세요.'
     : c.includes('email-already-in-use') ? '이미 있는 아이디예요. 로그인해 주세요.'
     : c.includes('weak-password') ? '비밀번호는 6자 이상으로 해 주세요.'
     : c.includes('configuration-not-found')||c.includes('internal-error') ? '아직 로그인 기능이 켜지지 않았어요. Firebase에서 Authentication을 시작해 주세요.'
-    : c.includes('operation-not-allowed') || c.includes('admin-restricted') ? '지금은 계정을 만들 수 없게 설정돼 있어요.'
+    : c.includes('operation-not-allowed') || c.includes('admin-restricted') ? (googleTry ? '구글 로그인이 아직 켜지지 않았어요. Firebase에서 Google 로그인을 사용 설정해 주세요.' : '지금은 계정을 만들 수 없게 설정돼 있어요.')
     : signup ? '계정을 만들지 못했어요. 다시 해 주세요.' : '아이디 또는 비밀번호가 맞지 않아요.';
   $('loginform').onsubmit=async e=>{
     e.preventDefault(); showErr('');
@@ -1249,6 +1258,18 @@ $('bkin').onclick=()=>{
     }catch(err){ showErr(errMsg(err&&err.code||'')); }
     $('loginbtn').disabled=false; $('loginbtn').textContent=label;
   };
+  // 구글 로그인: 팝업으로 열고, 팝업이 막히는 환경(홈 화면 앱 등)에서는 페이지를 넘겨서 로그인해요.
+  // 아이디 계정에 구글을 '연결'해 두면 구글로 들어와도 같은 계정(같은 권한·데이터)으로 들어와요.
+  const gprov=()=>{ const p=new firebase.auth.GoogleAuthProvider(); p.setCustomParameters({prompt:'select_account'}); return p; };
+  const popupFail=c=>c.includes('popup-blocked')||c.includes('operation-not-supported')||c.includes('web-storage-unsupported');
+  let googleTry=false;
+  $('googlebtn').onclick=async()=>{
+    showErr(''); googleTry=true; const b=$('googlebtn'); b.disabled=true;
+    try{ await auth.signInWithPopup(gprov()); }
+    catch(err){ const c=err&&err.code||''; if(popupFail(c)){ try{ await auth.signInWithRedirect(gprov()); return; }catch(e2){ showErr(errMsg(e2&&e2.code||'')); } } else showErr(errMsg(c)); }
+    b.disabled=false; googleTry=false;
+  };
+  auth.getRedirectResult().catch(err=>{ googleTry=true; showErr(errMsg(err&&err.code||'')); googleTry=false; });
   const gateShow=which=>{ $('loginform').hidden=which!=='login'; $('waitcard').hidden=which!=='wait'; };
   window.logout=()=>auth.signOut();
   window.denied=msg=>{ entered=false; me={admin:false,access:{}}; noAccess(); auth.signOut(); setMode(false); showErr(msg||'이 계정은 볼 권한이 없어요. 홍이 님께 말해 주세요.'); };
@@ -1257,6 +1278,14 @@ $('bkin').onclick=()=>{
     const id=(u.email||'').split('@')[0];
     $('who').replaceChildren(document.createTextNode(name||id),Object.assign(document.createElement('span'),{textContent:`${name?' · '+id:''} · ${admin?'관리자':'사용자'}`}));
     $('acctbox').hidden=false;
+    const ps=(u.providerData||[]).map(p=>p.providerId);
+    $('pwedit').hidden=!ps.includes('password');
+    $('glink').hidden=ps.includes('google.com');
+  };
+  $('glink').onclick=async()=>{
+    const u=auth.currentUser; if(!u) return;
+    try{ await u.linkWithPopup(gprov()); $('glink').hidden=true; alert('구글 계정을 연결했어요. 다음부터는 구글로 로그인해도 이 계정으로 들어와요.'); }
+    catch(err){ const c=err&&err.code||''; const t=popupFail(c)?'팝업이 막혀 있어요. 팝업을 허용하고 다시 해 주세요.':errMsg(c); if(t) alert(t); }
   };
   $('nameedit').onclick=async()=>{
     if(!myRef) return;
@@ -1290,6 +1319,7 @@ $('bkin').onclick=()=>{
       tree=[]; render(); watch(); setTimeout(()=>$('loginid').focus(),0); return;
     }
     const email=(u.email||'').toLowerCase(), id=email.split('@')[0];
+    if(!signupName && u.displayName) signupName=u.displayName.slice(0,20);  // 구글로 처음 들어온 사람은 구글 이름을 써요
     const ref=myRef=fs.collection('users').doc(u.uid);
     const joined=Date.parse(u.metadata&&u.metadata.creationTime)||Date.now();
     if(email===ADMIN_EMAIL){
